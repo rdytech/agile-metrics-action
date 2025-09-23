@@ -1,0 +1,303 @@
+name: Delivery Metrics
+
+on:
+  schedule:
+    - cron: '17 12 * * 4' # every Thursday at 12:17 UTC
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - '.github/workflows/metrics.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect Deployment Frequency & Lead Time for Change
+        id: collect
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+
+            const iso = (d)=> new Date(d).toISOString();
+            const hoursBetween = (a,b)=> (new Date(a)-new Date(b))/36e5;
+            const daysBetween  = (a,b)=> (new Date(a)-new Date(b))/864e5;
+
+            // ---- helpers ----
+            async function listReleases() {
+              const res = await github.request("GET /repos/{owner}/{repo}/releases", {
+                owner, repo, per_page: 100
+              });
+              const rels = res.data
+                .filter(r => !r.draft) // ignore drafts
+                .sort((a,b)=> new Date(b.created_at) - new Date(a.created_at));
+              return rels;
+            }
+
+            async function listTags() {
+              // Basic tag list (no timestamps here)
+              const res = await github.request("GET /repos/{owner}/{repo}/tags", {
+                owner, repo, per_page: 100
+              });
+              return res.data;
+            }
+
+            async function resolveTag(tagName) {
+              // Try annotated tag first to get tagger.date; fallback to commit date (lightweight tag)
+              try {
+                const ref = await github.request("GET /repos/{owner}/{repo}/git/ref/{ref}", {
+                  owner, repo, ref: `tags/${tagName}`
+                });
+                const obj = ref.data.object;
+                if (obj.type === "tag") {
+                  const tagObj = await github.request("GET /repos/{owner}/{repo}/git/tags/{tag_sha}", {
+                    owner, repo, tag_sha: obj.sha
+                  });
+                  const created_at = tagObj.data.tagger?.date || null;
+                  // The tag object points to the commit (or another tag)
+                  let sha = tagObj.data.object.sha;
+                  // If it points to another tag, follow once
+                  if (tagObj.data.object.type === "tag") {
+                    const tagObj2 = await github.request("GET /repos/{owner}/{repo}/git/tags/{tag_sha}", {
+                      owner, repo, tag_sha: tagObj.data.object.sha
+                    });
+                    sha = tagObj2.data.object.sha;
+                  }
+                  return { name: tagName, sha, created_at };
+                } else if (obj.type === "commit") {
+                  const commit = await github.request("GET /repos/{owner}/{repo}/commits/{ref}", {
+                    owner, repo, ref: obj.sha
+                  });
+                  const created_at = commit.data.commit.committer?.date || commit.data.commit.author?.date;
+                  return { name: tagName, sha: obj.sha, created_at };
+                }
+              } catch (e) {
+                core.warning(`Failed to resolve tag ${tagName}: ${e.message}`);
+              }
+              return null;
+            }
+
+            async function compareCommits(base, head) {
+              // Try compare API; if too large, it returns `total_commits` and may truncate commit list.
+              try {
+                const res = await github.request("GET /repos/{owner}/{repo}/compare/{base}...{head}", {
+                  owner, repo, base, head
+                });
+                return {
+                  truncated: !!res.data.files?.some(f => f.status === 'removed') && res.data.commits?.length < res.data.total_commits, // weak signal
+                  commits: res.data.commits || []
+                };
+              } catch (e) {
+                core.warning(`Compare failed (${base}...${head}): ${e.message}`);
+                return { truncated: true, commits: [] };
+              }
+            }
+
+            // ---- main flow ----
+            // Prefer releases, then tags
+            let source = null;
+            let latest = null;
+            let previous = null;
+
+            const releases = await listReleases();
+            if (releases.length >= 1) {
+              source = "release";
+              latest = {
+                name: releases[0].name || releases[0].tag_name,
+                tag: releases[0].tag_name,
+                created_at: releases[0].created_at
+              };
+              if (releases.length >= 2) {
+                previous = {
+                  name: releases[1].name || releases[1].tag_name,
+                  tag: releases[1].tag_name,
+                  created_at: releases[1].created_at
+                };
+              }
+              // resolve SHAs from tags
+              const headResolved = await resolveTag(latest.tag);
+              latest.sha = headResolved?.sha;
+              // created_at for metric should be the release creation time (business event)
+              latest.created_at = releases[0].created_at;
+
+              if (previous) {
+                const baseResolved = await resolveTag(previous.tag);
+                previous.sha = baseResolved?.sha;
+                previous.created_at = releases[1].created_at;
+              }
+            } else {
+              const tags = await listTags();
+              if (tags.length === 0) {
+                core.setOutput("metrics", JSON.stringify({ error: "No releases or tags found" }));
+                core.warning("No releases or tags to compute metrics from.");
+                return;
+              }
+              source = "tag";
+              // Use the first two tags as 'latest' and 'previous' in listing order
+              // (GitHub returns tags in commit time order for the default branch)
+              const latestTag = await resolveTag(tags[0].name);
+              const prevTag   = tags[1] ? await resolveTag(tags[1].name) : null;
+              latest = latestTag;
+              previous = prevTag;
+              // If resolveTag couldn't find a created_at for annotated tags, we already fallback to commit date.
+            }
+
+            // If we still don’t have latest or its sha/date, bail out
+            if (!latest?.sha || !latest?.created_at) {
+              core.setOutput("metrics", JSON.stringify({ error: "Could not resolve latest release/tag SHA or created_at" }));
+              core.warning("Could not resolve latest release/tag SHA or created_at.");
+              return;
+            }
+
+            // Deployment Frequency = time between latest and previous creation times (days)
+            let deployment_frequency_days = null;
+            if (previous?.created_at) {
+              deployment_frequency_days = Number(daysBetween(latest.created_at, previous.created_at).toFixed(3));
+            }
+
+            // Lead Time for Change
+            // Compare commits between previous->latest. If no previous, use just the tagged commit.
+            let commitDates = [];
+            let allCommits = [];
+            if (previous?.sha) {
+              const cmp = await compareCommits(previous.sha, latest.sha);
+              allCommits = cmp.commits || [];
+              // Use committer date (when code hit main) if available, else author date
+              commitDates = allCommits.map(c =>
+                c.commit?.committer?.date || c.commit?.author?.date
+              ).filter(Boolean);
+            } else {
+              // Single-tag case: use the single tagged commit
+              const commit = await github.request("GET /repos/{owner}/{repo}/commits/{ref}", {
+                owner, repo, ref: latest.sha
+              });
+              allCommits = [commit.data];
+              const dt = commit.data.commit.committer?.date || commit.data.commit.author?.date;
+              if (dt) commitDates = [dt];
+            }
+
+            let ltc_avg_hours = null, ltc_oldest_hours = null, ltc_newest_hours = null;
+            let oldestCommitSha = null, newestCommitSha = null;
+            if (commitDates.length > 0) {
+              const commitsWithAges = allCommits.map(c => ({
+                sha: c.sha,
+                date: c.commit?.committer?.date || c.commit?.author?.date,
+                age: hoursBetween(latest.created_at, c.commit?.committer?.date || c.commit?.author?.date),
+                isMerge: c.parents?.length > 1 || false, // merge commits have multiple parents
+                message: c.commit?.message || ''
+              })).filter(c => c.date);
+
+              if (commitsWithAges.length > 0) {
+                // Calculate overall stats using all commits (including merges)
+                const ages = commitsWithAges.map(c => c.age);
+                const sum = ages.reduce((a,b)=>a+b,0);
+                ltc_avg_hours = Number((sum/ages.length).toFixed(2));
+                ltc_oldest_hours = Number(Math.max(...ages).toFixed(2));
+                ltc_newest_hours = Number(Math.min(...ages).toFixed(2));
+
+                // Find oldest commit (can be merge or non-merge)
+                const oldestCommit = commitsWithAges.find(c => c.age === Math.max(...ages));
+                oldestCommitSha = oldestCommit?.sha;
+
+                // Find newest NON-MERGE commit
+                const nonMergeCommits = commitsWithAges.filter(c => !c.isMerge);
+                if (nonMergeCommits.length > 0) {
+                  const newestNonMerge = nonMergeCommits.find(c => c.age === Math.min(...nonMergeCommits.map(nc => nc.age)));
+                  newestCommitSha = newestNonMerge?.sha;
+                  // Update newest_hours to reflect the newest non-merge commit
+                  ltc_newest_hours = Number(Math.min(...nonMergeCommits.map(c => c.age)).toFixed(2));
+                } else {
+                  // Fallback: if all commits are merges, use the newest merge commit
+                  const newestCommit = commitsWithAges.find(c => c.age === Math.min(...ages));
+                  newestCommitSha = newestCommit?.sha;
+                }
+              } else {
+                // Fallback to original logic if we can't match commits with dates
+                const ages = commitDates.map(dt => hoursBetween(latest.created_at, dt));
+                const sum = ages.reduce((a,b)=>a+b,0);
+                ltc_avg_hours = Number((sum/ages.length).toFixed(2));
+                ltc_oldest_hours = Number(Math.max(...ages).toFixed(2));
+                ltc_newest_hours = Number(Math.min(...ages).toFixed(2));
+              }
+            }
+
+            const out = {
+              generated_at: iso(new Date()),
+              repo: `${owner}/${repo}`,
+              source, // "release" or "tag"
+              latest: {
+                name: latest.name || latest.tag || latest?.name,
+                tag: latest.tag || latest?.name,
+                sha: latest.sha,
+                created_at: iso(latest.created_at)
+              },
+              previous: previous ? {
+                name: previous.name || previous.tag || previous?.name,
+                tag: previous.tag || previous?.name,
+                sha: previous.sha || null,
+                created_at: previous.created_at ? iso(previous.created_at) : null
+              } : null,
+              metrics: {
+                deployment_frequency_days,
+                lead_time_for_change: {
+                  commit_count: commitDates.length,
+                  avg_hours: ltc_avg_hours,
+                  oldest_hours: ltc_oldest_hours,
+                  newest_hours: ltc_newest_hours,
+                  oldest_commit_sha: oldestCommitSha,
+                  newest_commit_sha: newestCommitSha,
+                  newest_excludes_merges: true
+                }
+              }
+            };
+
+            const fs = require('fs');
+            fs.mkdirSync("metrics", { recursive: true });
+            fs.writeFileSync("metrics/delivery_metrics.json", JSON.stringify(out, null, 2));
+
+            core.setOutput("metrics", JSON.stringify(out));
+            // Write a short Markdown summary
+            const formatHoursToDays = (hours) => {
+              if (hours == null) return "N/A";
+              const days = (hours / 24).toFixed(1);
+              const roundedHours = Math.max(0.1, Math.round(hours * 10) / 10); // minimum 0.1h display
+              return `${days} days (${roundedHours}h)`;
+            };
+
+            const summary = `
+            ### Delivery Metrics
+            - **Source:** ${out.source}
+            - **Latest:** ${out.latest.tag} @ ${out.latest.created_at}
+            - **Deployment Frequency (days):** ${out.metrics.deployment_frequency_days ?? "N/A"}
+            - **Lead Time for Change**
+              - commit_count: ${out.metrics.lead_time_for_change.commit_count}
+              - avg: ${formatHoursToDays(out.metrics.lead_time_for_change.avg_hours)}
+              - oldest: ${formatHoursToDays(out.metrics.lead_time_for_change.oldest_hours)} ${out.metrics.lead_time_for_change.oldest_commit_sha ? `(${out.metrics.lead_time_for_change.oldest_commit_sha.substring(0, 7)})` : ''}
+              - newest: ${formatHoursToDays(out.metrics.lead_time_for_change.newest_hours)} ${out.metrics.lead_time_for_change.newest_commit_sha ? `(${out.metrics.lead_time_for_change.newest_commit_sha.substring(0, 7)})` : ''}
+            `;
+            await core.summary.addRaw(summary).write();
+
+      - name: Commit metrics
+        if: github.event_name != 'pull_request'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          ts=$(date -u +"%Y%m%dT%H%M%SZ")
+          git add metrics/delivery_metrics.json
+          git commit -m "devex: delivery metrics ${ts}" || echo "No changes"
+          git push
+
+      - name: Upload metrics artifact (PR mode)
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: delivery-metrics
+          path: metrics/delivery_metrics.json
+          retention-days: 7
