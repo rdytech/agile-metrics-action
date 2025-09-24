@@ -52,14 +52,16 @@ describe('OutputManager', () => {
         source: 'release',
         latest: { tag: 'v1.0.0', created_at: '2023-01-01T00:00:00Z' },
         metrics: {
-          deployment_frequency_days: 7,
-          lead_time_for_change: {
-            commit_count: 5,
-            avg_hours: 24,
-            oldest_hours: 48,
-            newest_hours: 12,
-            oldest_commit_sha: 'old123',
-            newest_commit_sha: 'new456'
+          dora: {
+            deployment_frequency_days: 7,
+            lead_time_for_change: {
+              commit_count: 5,
+              avg_hours: 24,
+              oldest_hours: 48,
+              newest_hours: 12,
+              oldest_commit_sha: 'old123',
+              newest_commit_sha: 'new456'
+            }
           }
         }
       }
@@ -152,12 +154,14 @@ describe('OutputManager', () => {
     it('should set individual metric outputs', () => {
       const mockMetrics = {
         metrics: {
-          deployment_frequency_days: 5.5,
-          lead_time_for_change: {
-            commit_count: 3,
-            avg_hours: 18.5,
-            oldest_hours: 36,
-            newest_hours: 6
+          dora: {
+            deployment_frequency_days: 5.5,
+            lead_time_for_change: {
+              commit_count: 3,
+              avg_hours: 18.5,
+              oldest_hours: 36,
+              newest_hours: 6
+            }
           }
         }
       }
@@ -175,12 +179,14 @@ describe('OutputManager', () => {
     it('should handle null metric values', () => {
       const mockMetrics = {
         metrics: {
-          deployment_frequency_days: null,
-          lead_time_for_change: {
-            commit_count: 0,
-            avg_hours: null,
-            oldest_hours: null,
-            newest_hours: null
+          dora: {
+            deployment_frequency_days: null,
+            lead_time_for_change: {
+              commit_count: 0,
+              avg_hours: null,
+              oldest_hours: null,
+              newest_hours: null
+            }
           }
         }
       }
@@ -202,14 +208,16 @@ describe('OutputManager', () => {
         source: 'release',
         latest: { tag: 'v1.0.0', created_at: '2023-01-01T00:00:00Z' },
         metrics: {
-          deployment_frequency_days: 7,
-          lead_time_for_change: {
-            commit_count: 5,
-            avg_hours: 24,
-            oldest_hours: 48,
-            newest_hours: 12,
-            oldest_commit_sha: 'old123',
-            newest_commit_sha: 'new456'
+          dora: {
+            deployment_frequency_days: 7,
+            lead_time_for_change: {
+              commit_count: 5,
+              avg_hours: 24,
+              oldest_hours: 48,
+              newest_hours: 12,
+              oldest_commit_sha: 'old123',
+              newest_commit_sha: 'new456'
+            }
           }
         }
       }
@@ -217,7 +225,7 @@ describe('OutputManager', () => {
       await outputManager.createMarkdownSummary(mockMetrics)
 
       expect(mockCore.summary.addRaw).toHaveBeenCalledWith(
-        expect.stringContaining('### Delivery Metrics')
+        expect.stringContaining('### Agile Metrics Summary')
       )
       expect(mockCore.summary.addRaw).toHaveBeenCalledWith(
         expect.stringContaining('**Source:** release')
@@ -231,6 +239,9 @@ describe('OutputManager', () => {
 
       await outputManager.createMarkdownSummary(mockMetrics)
 
+      expect(mockCore.summary.addRaw).toHaveBeenCalledWith(
+        expect.stringContaining('### Agile Metrics - Error')
+      )
       expect(mockCore.summary.addRaw).toHaveBeenCalledWith(
         expect.stringContaining('❌ **Error:** Test error message')
       )

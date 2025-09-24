@@ -189,4 +189,150 @@ export class GitHubClient {
       return null
     }
   }
+
+  /**
+   * Get pull request details
+   * @param {number} prNumber - Pull request number
+   * @returns {Promise<Object|null>} Pull request object or null if failed
+   */
+  async getPullRequest(prNumber) {
+    try {
+      const response = await this.octokit.request(
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          pull_number: prNumber
+        }
+      )
+
+      return response.data
+    } catch (error) {
+      core.warning(`Failed to get PR ${prNumber}: ${error.message}`)
+      return null
+    }
+  }
+
+  /**
+   * Get pull request files
+   * @param {number} prNumber - Pull request number
+   * @returns {Promise<Array>} Array of file objects or empty array if failed
+   */
+  async getPullRequestFiles(prNumber) {
+    try {
+      const response = await this.octokit.request(
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}/files',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          pull_number: prNumber
+        }
+      )
+
+      return response.data
+    } catch (error) {
+      core.warning(`Failed to get PR files ${prNumber}: ${error.message}`)
+      return []
+    }
+  }
+
+  /**
+   * Create a comment on a pull request
+   * @param {number} prNumber - Pull request number
+   * @param {string} body - Comment body
+   * @returns {Promise<Object|null>} Comment object or null if failed
+   */
+  async createPRComment(prNumber, body) {
+    try {
+      const response = await this.octokit.request(
+        'POST /repos/{owner}/{repo}/issues/{issue_number}/comments',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          issue_number: prNumber,
+          body
+        }
+      )
+
+      return response.data
+    } catch (error) {
+      core.warning(`Failed to create PR comment ${prNumber}: ${error.message}`)
+      return null
+    }
+  }
+
+  /**
+   * Add a label to a pull request
+   * @param {number} prNumber - Pull request number
+   * @param {string} label - Label to add
+   * @returns {Promise<boolean>} True if successful, false otherwise
+   */
+  async addPRLabel(prNumber, label) {
+    try {
+      await this.octokit.request(
+        'POST /repos/{owner}/{repo}/issues/{issue_number}/labels',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          issue_number: prNumber,
+          labels: [label]
+        }
+      )
+
+      return true
+    } catch (error) {
+      core.warning(`Failed to add PR label ${prNumber}: ${error.message}`)
+      return false
+    }
+  }
+
+  /**
+   * Get commits in a pull request
+   * @param {number} prNumber - Pull request number
+   * @returns {Promise<Array>} Array of commit objects or empty array if failed
+   */
+  async getPullRequestCommits(prNumber) {
+    try {
+      const response = await this.octokit.request(
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}/commits',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          pull_number: prNumber
+        }
+      )
+
+      return response.data
+    } catch (error) {
+      core.warning(`Failed to get PR commits ${prNumber}: ${error.message}`)
+      return []
+    }
+  }
+
+  /**
+   * Compare two commits to get the diff
+   * @param {string} base - Base commit SHA
+   * @param {string} head - Head commit SHA
+   * @returns {Promise<Object|null>} Comparison data or null if failed
+   */
+  async compareCommitsDiff(base, head) {
+    try {
+      const response = await this.octokit.request(
+        'GET /repos/{owner}/{repo}/compare/{base}...{head}',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          base,
+          head
+        }
+      )
+
+      return response.data
+    } catch (error) {
+      core.warning(
+        `Failed to compare commits ${base}...${head}: ${error.message}`
+      )
+      return null
+    }
+  }
 }

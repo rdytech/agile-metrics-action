@@ -41,6 +41,32 @@ inputs:
     required: false
     default: '100'
 
+  enable-dora-metrics:
+    description: 'Whether to enable DORA metrics collection'
+    required: false
+    default: 'true'
+
+  enable-devex-metrics:
+    description: 'Whether to enable DevEx metrics collection'
+    required: false
+    default: 'false'
+
+  files-to-ignore:
+    description:
+      'Comma-separated list of file patterns to ignore when calculating PR size'
+    required: false
+    default: ''
+
+  ignore-line-deletions:
+    description: 'Whether to ignore line deletions when calculating PR size'
+    required: false
+    default: 'false'
+
+  ignore-file-deletions:
+    description: 'Whether to ignore file deletions when calculating PR size'
+    required: false
+    default: 'false'
+
 # Define your outputs here.
 outputs:
   metrics-json:
@@ -63,6 +89,24 @@ outputs:
 
   metrics-file-path:
     description: 'Path to the generated metrics file'
+
+  pr-size:
+    description: 'PR size metric (xs, s, m, l, xl)'
+
+  pr-size-category:
+    description: 'PR size category with size/ prefix'
+
+  pr-size-details:
+    description: 'Detailed PR size metrics as JSON string'
+
+  pr-maturity-ratio:
+    description: 'PR maturity ratio (0.0 to 1.0)'
+
+  pr-maturity-percentage:
+    description: 'PR maturity percentage (0 to 100)'
+
+  pr-maturity-details:
+    description: 'Detailed PR maturity metrics as JSON string'
 
 runs:
   using: node24

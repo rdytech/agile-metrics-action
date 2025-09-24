@@ -233,4 +233,202 @@ describe('GitHubClient', () => {
       )
     })
   })
+
+  describe('Pull Request Operations', () => {
+    it('should get pull request successfully', async () => {
+      const mockPR = {
+        number: 123,
+        title: 'Test PR',
+        state: 'open'
+      }
+
+      mockOctokit.request.mockResolvedValueOnce({ data: mockPR })
+
+      const result = await client.getPullRequest(123)
+
+      expect(mockOctokit.request).toHaveBeenCalledWith(
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}',
+        {
+          owner: 'test-owner',
+          repo: 'test-repo',
+          pull_number: 123
+        }
+      )
+      expect(result).toEqual(mockPR)
+    })
+
+    it('should handle PR fetch errors', async () => {
+      mockOctokit.request.mockRejectedValueOnce(new Error('PR not found'))
+
+      const result = await client.getPullRequest(123)
+
+      expect(result).toBeNull()
+      expect(mockCore.warning).toHaveBeenCalledWith(
+        'Failed to get PR 123: PR not found'
+      )
+    })
+
+    it('should get pull request files successfully', async () => {
+      const mockFiles = [
+        {
+          filename: 'src/main.js',
+          additions: 10,
+          deletions: 5,
+          status: 'modified'
+        }
+      ]
+
+      mockOctokit.request.mockResolvedValueOnce({ data: mockFiles })
+
+      const result = await client.getPullRequestFiles(123)
+
+      expect(mockOctokit.request).toHaveBeenCalledWith(
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}/files',
+        {
+          owner: 'test-owner',
+          repo: 'test-repo',
+          pull_number: 123
+        }
+      )
+      expect(result).toEqual(mockFiles)
+    })
+
+    it('should handle PR files fetch errors', async () => {
+      mockOctokit.request.mockRejectedValueOnce(new Error('Files not found'))
+
+      const result = await client.getPullRequestFiles(123)
+
+      expect(result).toEqual([])
+      expect(mockCore.warning).toHaveBeenCalledWith(
+        'Failed to get PR files 123: Files not found'
+      )
+    })
+
+    it('should create PR comment successfully', async () => {
+      const mockComment = { id: 456, body: 'Test comment' }
+      mockOctokit.request.mockResolvedValueOnce({ data: mockComment })
+
+      const result = await client.createPRComment(123, 'Test comment')
+
+      expect(mockOctokit.request).toHaveBeenCalledWith(
+        'POST /repos/{owner}/{repo}/issues/{issue_number}/comments',
+        {
+          owner: 'test-owner',
+          repo: 'test-repo',
+          issue_number: 123,
+          body: 'Test comment'
+        }
+      )
+      expect(result).toEqual(mockComment)
+    })
+
+    it('should handle PR comment creation errors', async () => {
+      mockOctokit.request.mockRejectedValueOnce(new Error('Comment failed'))
+
+      const result = await client.createPRComment(123, 'Test comment')
+
+      expect(result).toBeNull()
+      expect(mockCore.warning).toHaveBeenCalledWith(
+        'Failed to create PR comment 123: Comment failed'
+      )
+    })
+
+    it('should add PR label successfully', async () => {
+      mockOctokit.request.mockResolvedValueOnce({ data: {} })
+
+      const result = await client.addPRLabel(123, 'size/m')
+
+      expect(mockOctokit.request).toHaveBeenCalledWith(
+        'POST /repos/{owner}/{repo}/issues/{issue_number}/labels',
+        {
+          owner: 'test-owner',
+          repo: 'test-repo',
+          issue_number: 123,
+          labels: ['size/m']
+        }
+      )
+      expect(result).toBe(true)
+    })
+
+    it('should handle PR label addition errors', async () => {
+      mockOctokit.request.mockRejectedValueOnce(new Error('Label failed'))
+
+      const result = await client.addPRLabel(123, 'size/m')
+
+      expect(result).toBe(false)
+      expect(mockCore.warning).toHaveBeenCalledWith(
+        'Failed to add PR label 123: Label failed'
+      )
+    })
+
+    it('should get pull request commits successfully', async () => {
+      const mockCommits = [
+        { sha: 'commit1', commit: { message: 'First commit' } },
+        { sha: 'commit2', commit: { message: 'Second commit' } }
+      ]
+
+      mockOctokit.request.mockResolvedValueOnce({ data: mockCommits })
+
+      const result = await client.getPullRequestCommits(123)
+
+      expect(mockOctokit.request).toHaveBeenCalledWith(
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}/commits',
+        {
+          owner: 'test-owner',
+          repo: 'test-repo',
+          pull_number: 123
+        }
+      )
+      expect(result).toEqual(mockCommits)
+    })
+
+    it('should handle PR commits fetch errors', async () => {
+      mockOctokit.request.mockRejectedValueOnce(new Error('Commits failed'))
+
+      const result = await client.getPullRequestCommits(123)
+
+      expect(result).toEqual([])
+      expect(mockCore.warning).toHaveBeenCalledWith(
+        'Failed to get PR commits 123: Commits failed'
+      )
+    })
+
+    it('should compare commits diff successfully', async () => {
+      const mockComparison = {
+        files: [
+          {
+            filename: 'src/file1.js',
+            additions: 10,
+            deletions: 5
+          }
+        ]
+      }
+
+      mockOctokit.request.mockResolvedValueOnce({ data: mockComparison })
+
+      const result = await client.compareCommitsDiff('base-sha', 'head-sha')
+
+      expect(mockOctokit.request).toHaveBeenCalledWith(
+        'GET /repos/{owner}/{repo}/compare/{base}...{head}',
+        {
+          owner: 'test-owner',
+          repo: 'test-repo',
+          base: 'base-sha',
+          head: 'head-sha'
+        }
+      )
+      expect(result).toEqual(mockComparison)
+    })
+
+    it('should handle commits diff comparison errors', async () => {
+      mockOctokit.request.mockRejectedValueOnce(new Error('Compare failed'))
+
+      const result = await client.compareCommitsDiff('base-sha', 'head-sha')
+
+      expect(result).toBeNull()
+      expect(mockCore.warning).toHaveBeenCalledWith(
+        'Failed to compare commits base-sha...head-sha: Compare failed'
+      )
+    })
+  })
 })

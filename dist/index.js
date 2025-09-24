@@ -31431,6 +31431,152 @@ class GitHubClient {
       return null
     }
   }
+
+  /**
+   * Get pull request details
+   * @param {number} prNumber - Pull request number
+   * @returns {Promise<Object|null>} Pull request object or null if failed
+   */
+  async getPullRequest(prNumber) {
+    try {
+      const response = await this.octokit.request(
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          pull_number: prNumber
+        }
+      );
+
+      return response.data
+    } catch (error) {
+      coreExports.warning(`Failed to get PR ${prNumber}: ${error.message}`);
+      return null
+    }
+  }
+
+  /**
+   * Get pull request files
+   * @param {number} prNumber - Pull request number
+   * @returns {Promise<Array>} Array of file objects or empty array if failed
+   */
+  async getPullRequestFiles(prNumber) {
+    try {
+      const response = await this.octokit.request(
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}/files',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          pull_number: prNumber
+        }
+      );
+
+      return response.data
+    } catch (error) {
+      coreExports.warning(`Failed to get PR files ${prNumber}: ${error.message}`);
+      return []
+    }
+  }
+
+  /**
+   * Create a comment on a pull request
+   * @param {number} prNumber - Pull request number
+   * @param {string} body - Comment body
+   * @returns {Promise<Object|null>} Comment object or null if failed
+   */
+  async createPRComment(prNumber, body) {
+    try {
+      const response = await this.octokit.request(
+        'POST /repos/{owner}/{repo}/issues/{issue_number}/comments',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          issue_number: prNumber,
+          body
+        }
+      );
+
+      return response.data
+    } catch (error) {
+      coreExports.warning(`Failed to create PR comment ${prNumber}: ${error.message}`);
+      return null
+    }
+  }
+
+  /**
+   * Add a label to a pull request
+   * @param {number} prNumber - Pull request number
+   * @param {string} label - Label to add
+   * @returns {Promise<boolean>} True if successful, false otherwise
+   */
+  async addPRLabel(prNumber, label) {
+    try {
+      await this.octokit.request(
+        'POST /repos/{owner}/{repo}/issues/{issue_number}/labels',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          issue_number: prNumber,
+          labels: [label]
+        }
+      );
+
+      return true
+    } catch (error) {
+      coreExports.warning(`Failed to add PR label ${prNumber}: ${error.message}`);
+      return false
+    }
+  }
+
+  /**
+   * Get commits in a pull request
+   * @param {number} prNumber - Pull request number
+   * @returns {Promise<Array>} Array of commit objects or empty array if failed
+   */
+  async getPullRequestCommits(prNumber) {
+    try {
+      const response = await this.octokit.request(
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}/commits',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          pull_number: prNumber
+        }
+      );
+
+      return response.data
+    } catch (error) {
+      coreExports.warning(`Failed to get PR commits ${prNumber}: ${error.message}`);
+      return []
+    }
+  }
+
+  /**
+   * Compare two commits to get the diff
+   * @param {string} base - Base commit SHA
+   * @param {string} head - Head commit SHA
+   * @returns {Promise<Object|null>} Comparison data or null if failed
+   */
+  async compareCommitsDiff(base, head) {
+    try {
+      const response = await this.octokit.request(
+        'GET /repos/{owner}/{repo}/compare/{base}...{head}',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          base,
+          head
+        }
+      );
+
+      return response.data
+    } catch (error) {
+      coreExports.warning(
+        `Failed to compare commits ${base}...${head}: ${error.message}`
+      );
+      return null
+    }
+  }
 }
 
 /**
@@ -31785,6 +31931,603 @@ class MetricsCollector {
   }
 }
 
+/**
+ * DevEx metrics collection class - independent from DORA metrics
+ */
+class DevExMetricsCollector {
+  /**
+   * Create a new DevEx metrics collector
+   * @param {GitHubClient} githubClient - GitHub API client
+   * @param {Object} options - Configuration options
+   */
+  constructor(githubClient, options = {}) {
+    this.githubClient = githubClient;
+    this.options = {
+      filesToIgnore: [],
+      ignoreLineDeletions: false,
+      ignoreFileDeletions: false,
+      ...options
+    };
+  }
+
+  /**
+   * Collect all DevEx metrics for the current PR
+   * @returns {Promise<Object>} Complete DevEx metrics data
+   */
+  async collectMetrics() {
+    try {
+      const prNumber = this.getPRNumber();
+      if (!prNumber) {
+        return {
+          error: 'No PR context found - DevEx metrics require a pull request'
+        }
+      }
+
+      coreExports.info(`Collecting DevEx metrics for PR #${prNumber}`);
+
+      // Collect PR size metrics
+      const prSizeMetrics = await this.calculatePRSize(prNumber);
+
+      // Collect PR maturity metrics
+      const prMaturityMetrics = await this.calculatePRMaturity(prNumber);
+
+      return {
+        pr_number: prNumber,
+        metrics: {
+          pr_size: prSizeMetrics,
+          pr_maturity: prMaturityMetrics
+        },
+        timestamp: new Date().toISOString()
+      }
+    } catch (error) {
+      coreExports.error(`DevEx metrics collection failed: ${error.message}`);
+      return {
+        error: error.message
+      }
+    }
+  }
+
+  /**
+   * Get the current PR number from GitHub context
+   * @returns {number|null} PR number or null if not in PR context
+   */
+  getPRNumber() {
+    // Check if we're in a pull request event
+    if (
+      githubExports.context.eventName === 'pull_request' ||
+      githubExports.context.eventName === 'pull_request_target'
+    ) {
+      return githubExports.context.payload.pull_request?.number
+    }
+
+    // Check if we're in a workflow_run event triggered by a PR
+    if (githubExports.context.eventName === 'workflow_run') {
+      return githubExports.context.payload.workflow_run?.pull_requests?.[0]?.number
+    }
+
+    return null
+  }
+
+  /**
+   * Calculate PR size metrics
+   * @param {number} prNumber - Pull request number
+   * @returns {Promise<Object>} PR size metrics
+   */
+  async calculatePRSize(prNumber) {
+    try {
+      const prDetails = await this.githubClient.getPullRequest(prNumber);
+      const prFiles = await this.githubClient.getPullRequestFiles(prNumber);
+
+      if (!prFiles || prFiles.length === 0) {
+        return {
+          size: 'xs',
+          category: 'size/xs',
+          details: {
+            total_additions: 0,
+            total_deletions: 0,
+            total_changes: 0,
+            files_changed: 0,
+            files_analyzed: 0
+          }
+        }
+      }
+
+      // Filter files based on ignore patterns
+      const filteredFiles = this.filterFiles(prFiles);
+
+      // Calculate size metrics
+      const sizeDetails = this.calculateSizeDetails(filteredFiles);
+      const sizeCategory = this.categorizePRSize(sizeDetails);
+
+      return {
+        size: sizeCategory,
+        category: `size/${sizeCategory}`,
+        details: sizeDetails
+      }
+    } catch (error) {
+      coreExports.warning(`Failed to calculate PR size: ${error.message}`);
+      return {
+        size: 'unknown',
+        category: 'size/unknown',
+        details: {
+          error: error.message
+        }
+      }
+    }
+  }
+
+  /**
+   * Filter files based on ignore patterns
+   * @param {Array} files - Array of PR file objects
+   * @returns {Array} Filtered files
+   */
+  filterFiles(files) {
+    if (!this.options.filesToIgnore.length) {
+      return files
+    }
+
+    return files.filter((file) => {
+      // Check if file matches any ignore pattern
+      const shouldIgnore = this.options.filesToIgnore.some((pattern) => {
+        // Convert glob pattern to regex (basic implementation)
+        const regexPattern = pattern.replace(/\*/g, '.*').replace(/\?/g, '.');
+        const regex = new RegExp(`^${regexPattern}$`);
+        return regex.test(file.filename)
+      });
+
+      if (shouldIgnore) {
+        coreExports.debug(`Ignoring file: ${file.filename}`);
+        return false
+      }
+
+      // Check if we should ignore deleted files
+      if (this.options.ignoreFileDeletions && file.status === 'removed') {
+        coreExports.debug(`Ignoring deleted file: ${file.filename}`);
+        return false
+      }
+
+      return true
+    })
+  }
+
+  /**
+   * Calculate detailed size metrics from filtered files
+   * @param {Array} files - Filtered PR files
+   * @returns {Object} Size details
+   */
+  calculateSizeDetails(files) {
+    let totalAdditions = 0;
+    let totalDeletions = 0;
+    let filesChanged = files.length;
+
+    files.forEach((file) => {
+      totalAdditions += file.additions || 0;
+
+      if (!this.options.ignoreLineDeletions) {
+        totalDeletions += file.deletions || 0;
+      }
+    });
+
+    const totalChanges = totalAdditions + totalDeletions;
+
+    return {
+      total_additions: totalAdditions,
+      total_deletions: totalDeletions,
+      total_changes: totalChanges,
+      files_changed: filesChanged,
+      files_analyzed: files.length
+    }
+  }
+
+  /**
+   * Categorize PR size based on change metrics
+   * @param {Object} sizeDetails - Size details object
+   * @returns {string} Size category (xs, s, m, l, xl)
+   */
+  categorizePRSize(sizeDetails) {
+    const { total_changes } = sizeDetails;
+
+    // Define size thresholds based on common PR size conventions
+    if (total_changes <= 10) return 'xs'
+    if (total_changes <= 50) return 's'
+    if (total_changes <= 200) return 'm'
+    if (total_changes <= 500) return 'l'
+    return 'xl'
+  }
+
+  /**
+   * Calculate PR maturity metrics
+   * @param {number} prNumber - Pull request number
+   * @returns {Promise<Object>} PR maturity metrics
+   */
+  async calculatePRMaturity(prNumber) {
+    try {
+      coreExports.debug(`=== Calculating PR Maturity for PR #${prNumber} ===`);
+
+      const prDetails = await this.githubClient.getPullRequest(prNumber);
+      if (!prDetails) {
+        coreExports.warning('Could not fetch PR details for maturity calculation');
+        return {
+          maturity_ratio: null,
+          maturity_percentage: null,
+          details: {
+            error: 'Could not fetch PR details'
+          }
+        }
+      }
+
+      const prCommits = await this.githubClient.getPullRequestCommits(prNumber);
+      coreExports.debug(`Found ${prCommits?.length || 0} commits in PR #${prNumber}`);
+
+      if (!prCommits || prCommits.length === 0) {
+        coreExports.warning('No commits found in PR for maturity calculation');
+        return {
+          maturity_ratio: null,
+          maturity_percentage: null,
+          details: {
+            error: 'No commits found in PR'
+          }
+        }
+      }
+
+      // Get PR creation time
+      const prCreatedAt = new Date(prDetails.created_at);
+      coreExports.debug(`PR created at: ${prCreatedAt.toISOString()}`);
+
+      // Filter commits that are after PR creation time
+      const commitsAfterPR = prCommits.filter((commit) => {
+        const commitDate = new Date(commit.commit.author.date);
+        return commitDate > prCreatedAt
+      });
+
+      coreExports.debug(
+        `Found ${commitsAfterPR.length} commits after PR creation time`
+      );
+
+      // If there's only one commit, check if it was pushed within 5 minutes of PR creation
+      if (prCommits.length === 1) {
+        const commitDate = new Date(prCommits[0].commit.author.date);
+        const timeDiffMinutes = (commitDate - prCreatedAt) / (1000 * 60);
+
+        coreExports.debug(
+          `Single commit time difference: ${timeDiffMinutes.toFixed(2)} minutes from PR creation`
+        );
+
+        const prFiles = await this.githubClient.getPullRequestFiles(prNumber);
+        const filteredFiles = this.filterFiles(prFiles || []);
+        const sizeDetails = this.calculateSizeDetails(filteredFiles);
+
+        coreExports.debug(
+          `Single commit PR - 100% maturity with ${sizeDetails.total_changes} total changes`
+        );
+
+        return {
+          maturity_ratio: 1.0,
+          maturity_percentage: 100,
+          details: {
+            total_commits: 1,
+            total_changes: sizeDetails.total_changes,
+            changes_after_publication: 0,
+            stable_changes: sizeDetails.total_changes,
+            first_commit_sha: prCommits[0].sha,
+            last_commit_sha: prCommits[0].sha,
+            pr_created_at: prCreatedAt.toISOString(),
+            reason: 'Single commit PR'
+          }
+        }
+      }
+
+      // Check if all commits are older than PR creation (or within 5 minutes)
+      const commitsWithinGracePeriod = prCommits.filter((commit) => {
+        const commitDate = new Date(commit.commit.author.date);
+        const timeDiffMinutes = Math.abs(commitDate - prCreatedAt) / (1000 * 60);
+        return timeDiffMinutes <= 5 || commitDate <= prCreatedAt
+      });
+
+      if (commitsWithinGracePeriod.length === prCommits.length) {
+        coreExports.debug(
+          'All commits are within 5 minutes of PR creation or older - 100% maturity'
+        );
+
+        const prFiles = await this.githubClient.getPullRequestFiles(prNumber);
+        const filteredFiles = this.filterFiles(prFiles || []);
+        const sizeDetails = this.calculateSizeDetails(filteredFiles);
+
+        return {
+          maturity_ratio: 1.0,
+          maturity_percentage: 100,
+          details: {
+            total_commits: prCommits.length,
+            total_changes: sizeDetails.total_changes,
+            changes_after_publication: 0,
+            stable_changes: sizeDetails.total_changes,
+            first_commit_sha: prCommits[0].sha,
+            last_commit_sha: prCommits[prCommits.length - 1].sha,
+            pr_created_at: prCreatedAt.toISOString(),
+            reason: 'All commits within grace period or pre-existing'
+          }
+        }
+      }
+
+      // Find commits that are meaningfully after PR creation (>5 minutes)
+      const significantCommitsAfterPR = prCommits.filter((commit) => {
+        const commitDate = new Date(commit.commit.author.date);
+        const timeDiffMinutes = (commitDate - prCreatedAt) / (1000 * 60);
+        return timeDiffMinutes > 5
+      });
+
+      if (significantCommitsAfterPR.length === 0) {
+        coreExports.debug('No significant commits after PR creation - 100% maturity');
+
+        const prFiles = await this.githubClient.getPullRequestFiles(prNumber);
+        const filteredFiles = this.filterFiles(prFiles || []);
+        const sizeDetails = this.calculateSizeDetails(filteredFiles);
+
+        return {
+          maturity_ratio: 1.0,
+          maturity_percentage: 100,
+          details: {
+            total_commits: prCommits.length,
+            total_changes: sizeDetails.total_changes,
+            changes_after_publication: 0,
+            stable_changes: sizeDetails.total_changes,
+            first_commit_sha: prCommits[0].sha,
+            last_commit_sha: prCommits[prCommits.length - 1].sha,
+            pr_created_at: prCreatedAt.toISOString(),
+            reason: 'No significant commits after PR publication'
+          }
+        }
+      }
+
+      // Calculate maturity based on changes introduced after the grace period
+      const firstSignificantCommit = significantCommitsAfterPR[0];
+      const lastCommit = prCommits[prCommits.length - 1];
+
+      coreExports.debug(
+        `Analyzing changes from first significant commit: ${firstSignificantCommit.sha}`
+      );
+
+      // Get total PR changes
+      const prFiles = await this.githubClient.getPullRequestFiles(prNumber);
+      const filteredFiles = this.filterFiles(prFiles || []);
+      const totalPRChanges = this.calculateSizeDetails(filteredFiles);
+
+      coreExports.debug(
+        `Total PR changes: ${totalPRChanges.total_changes} (${totalPRChanges.total_additions} additions, ${totalPRChanges.total_deletions} deletions)`
+      );
+
+      // Find the commit just before the first significant commit to use as baseline
+      const firstSignificantIndex = prCommits.findIndex(
+        (c) => c.sha === firstSignificantCommit.sha
+      );
+      const baselineCommit =
+        firstSignificantIndex > 0
+          ? prCommits[firstSignificantIndex - 1]
+          : prCommits[0];
+
+      coreExports.debug(
+        `Using baseline commit: ${baselineCommit.sha} (index: ${firstSignificantIndex > 0 ? firstSignificantIndex - 1 : 0})`
+      );
+
+      // Get changes introduced after the baseline (changes after meaningful publication)
+      const changesAfterPublicationDiff =
+        await this.githubClient.compareCommitsDiff(
+          baselineCommit.sha,
+          lastCommit.sha
+        );
+
+      if (!changesAfterPublicationDiff) {
+        coreExports.warning('Could not compare commits for maturity calculation');
+        return {
+          maturity_ratio: null,
+          maturity_percentage: null,
+          details: {
+            error: 'Could not compare commits for maturity analysis'
+          }
+        }
+      }
+
+      const changesAfterPublication = this.calculateDiffSize(
+        changesAfterPublicationDiff.files || []
+      );
+
+      coreExports.debug(
+        `Changes after meaningful publication: ${changesAfterPublication}`
+      );
+
+      // Calculate maturity ratio
+      const stableChanges = Math.max(
+        0,
+        totalPRChanges.total_changes - changesAfterPublication
+      );
+      const maturityRatio =
+        totalPRChanges.total_changes > 0
+          ? stableChanges / totalPRChanges.total_changes
+          : 1.0;
+      const maturityPercentage = Math.round(maturityRatio * 100);
+
+      coreExports.debug(
+        `Maturity calculation: stable=${stableChanges}, ratio=${maturityRatio}, percentage=${maturityPercentage}%`
+      );
+
+      return {
+        maturity_ratio: Math.round(maturityRatio * 1000) / 1000,
+        maturity_percentage: maturityPercentage,
+        details: {
+          total_commits: prCommits.length,
+          commits_after_publication: significantCommitsAfterPR.length,
+          total_changes: totalPRChanges.total_changes,
+          changes_after_publication: changesAfterPublication,
+          stable_changes: stableChanges,
+          first_commit_sha: prCommits[0].sha,
+          last_commit_sha: lastCommit.sha,
+          baseline_commit_sha: baselineCommit.sha,
+          first_significant_commit_sha: firstSignificantCommit.sha,
+          pr_created_at: prCreatedAt.toISOString(),
+          reason: 'Calculated based on meaningful commits after publication'
+        }
+      }
+    } catch (error) {
+      coreExports.warning(`Failed to calculate PR maturity: ${error.message}`);
+      return {
+        maturity_ratio: null,
+        maturity_percentage: null,
+        details: {
+          error: error.message
+        }
+      }
+    }
+  }
+
+  /**
+   * Calculate the size of changes in a diff
+   * @param {Array} files - Array of file diff objects
+   * @returns {number} Total number of changes
+   */
+  calculateDiffSize(files) {
+    let totalChanges = 0;
+
+    files.forEach((file) => {
+      // Apply the same filtering logic as for PR size
+      if (this.options.filesToIgnore.length > 0) {
+        const shouldIgnore = this.options.filesToIgnore.some((pattern) => {
+          const regexPattern = pattern.replace(/\*/g, '.*').replace(/\?/g, '.');
+          const regex = new RegExp(`^${regexPattern}$`);
+          return regex.test(file.filename)
+        });
+
+        if (shouldIgnore) {
+          return
+        }
+      }
+
+      if (this.options.ignoreFileDeletions && file.status === 'removed') {
+        return
+      }
+
+      totalChanges += file.additions || 0;
+
+      if (!this.options.ignoreLineDeletions) {
+        totalChanges += file.deletions || 0;
+      }
+    });
+
+    return totalChanges
+  }
+
+  /**
+   * Add PR comment with size and maturity information
+   * @param {number} prNumber - Pull request number
+   * @param {Object} prSizeMetrics - PR size metrics
+   * @param {Object} prMaturityMetrics - PR maturity metrics (optional)
+   * @returns {Promise<void>}
+   */
+  async addPRComment(prNumber, prSizeMetrics, prMaturityMetrics = null) {
+    try {
+      const { size, details } = prSizeMetrics;
+      const sizeEmoji = this.getSizeEmoji(size);
+
+      let comment = `## ${sizeEmoji} PR Size: ${size.toUpperCase()}
+
+This pull request has been automatically categorized as **${size}** based on the following metrics:
+
+- **Lines added:** ${details.total_additions}
+- **Lines removed:** ${details.total_deletions}
+- **Total changes:** ${details.total_changes}
+- **Files changed:** ${details.files_changed}`;
+
+      // Add PR maturity information if available
+      if (prMaturityMetrics && prMaturityMetrics.maturity_percentage !== null) {
+        const maturityEmoji = this.getMaturityEmoji(
+          prMaturityMetrics.maturity_percentage
+        );
+        const maturityLevel = this.getMaturityLevel(
+          prMaturityMetrics.maturity_percentage
+        );
+
+        comment += `
+
+## ${maturityEmoji} PR Maturity: ${prMaturityMetrics.maturity_percentage}%
+
+This pull request has a **${maturityLevel}** maturity rating based on code stability:
+
+- **Maturity ratio:** ${prMaturityMetrics.maturity_ratio}
+- **Total commits:** ${prMaturityMetrics.details?.total_commits || 'N/A'}
+- **Stable changes:** ${prMaturityMetrics.details?.stable_changes || 'N/A'}
+- **Changes after publication:** ${prMaturityMetrics.details?.changes_after_publication || 'N/A'}`;
+      }
+
+      comment += `
+
+*This comment was generated automatically by the Agile Metrics Action.*`;
+
+      await this.githubClient.createPRComment(prNumber, comment);
+      coreExports.info(`Added DevEx comment to PR #${prNumber}`);
+    } catch (error) {
+      coreExports.warning(`Failed to add PR comment: ${error.message}`);
+    }
+  }
+
+  /**
+   * Add size label to PR
+   * @param {number} prNumber - Pull request number
+   * @param {string} sizeCategory - Size category (e.g., 'size/m')
+   * @returns {Promise<void>}
+   */
+  async addPRLabel(prNumber, sizeCategory) {
+    try {
+      await this.githubClient.addPRLabel(prNumber, sizeCategory);
+      coreExports.info(`Added label '${sizeCategory}' to PR #${prNumber}`);
+    } catch (error) {
+      coreExports.warning(`Failed to add PR label: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get emoji for size category
+   * @param {string} size - Size category
+   * @returns {string} Emoji representation
+   */
+  getSizeEmoji(size) {
+    const emojiMap = {
+      xs: '🤏',
+      s: '🔹',
+      m: '🔸',
+      l: '🔶',
+      xl: '🔥'
+    };
+    return emojiMap[size] || '❓'
+  }
+
+  /**
+   * Get emoji for PR maturity percentage
+   * @param {number} percentage - Maturity percentage (0-100)
+   * @returns {string} Emoji representation
+   */
+  getMaturityEmoji(percentage) {
+    if (percentage === null || percentage === undefined) return '❓'
+    if (percentage >= 90) return '🎯'
+    if (percentage >= 75) return '✅'
+    if (percentage >= 50) return '⚠️'
+    if (percentage >= 25) return '🚧'
+    return '❌'
+  }
+
+  /**
+   * Get maturity level description
+   * @param {number} percentage - Maturity percentage (0-100)
+   * @returns {string} Maturity level description
+   */
+  getMaturityLevel(percentage) {
+    if (percentage === null || percentage === undefined) return 'Unknown'
+    if (percentage >= 90) return 'Excellent'
+    if (percentage >= 75) return 'Good'
+    if (percentage >= 50) return 'Moderate'
+    if (percentage >= 25) return 'Poor'
+    return 'Very Poor'
+  }
+}
+
 var execExports = requireExec();
 
 /**
@@ -31864,18 +32607,22 @@ class OutputManager {
       return
     }
 
-    // Set individual metric outputs
-    const metrics = metricsData.metrics;
-    const ltc = metrics.lead_time_for_change;
+    // Set DORA metric outputs if available
+    const doraMetrics = metricsData.metrics?.dora;
+    if (doraMetrics) {
+      const ltc = doraMetrics.lead_time_for_change;
 
-    coreExports.setOutput(
-      'deployment-frequency',
-      metrics.deployment_frequency_days?.toString() || ''
-    );
-    coreExports.setOutput('lead-time-avg', ltc.avg_hours?.toString() || '');
-    coreExports.setOutput('lead-time-oldest', ltc.oldest_hours?.toString() || '');
-    coreExports.setOutput('lead-time-newest', ltc.newest_hours?.toString() || '');
-    coreExports.setOutput('commit-count', ltc.commit_count?.toString() || '0');
+      coreExports.setOutput(
+        'deployment-frequency',
+        doraMetrics.deployment_frequency_days?.toString() || ''
+      );
+      coreExports.setOutput('lead-time-avg', ltc?.avg_hours?.toString() || '');
+      coreExports.setOutput('lead-time-oldest', ltc?.oldest_hours?.toString() || '');
+      coreExports.setOutput('lead-time-newest', ltc?.newest_hours?.toString() || '');
+      coreExports.setOutput('commit-count', ltc?.commit_count?.toString() || '0');
+    }
+
+    // DevEx outputs are set in main.js to avoid coupling
   }
 
   /**
@@ -31886,32 +32633,100 @@ class OutputManager {
     try {
       if (metricsData.error) {
         const errorSummary = `
-### Delivery Metrics - Error
+### Agile Metrics - Error
 ❌ **Error:** ${metricsData.error}
         `;
         await coreExports.summary.addRaw(errorSummary).write();
         return
       }
 
-      const metrics = metricsData.metrics;
-      const ltc = metrics.lead_time_for_change;
+      let summary = `### Agile Metrics Summary\n`;
 
-      const summary = `
-### Delivery Metrics
+      // Add DORA metrics section if available
+      const doraMetrics = metricsData.metrics?.dora;
+      if (doraMetrics) {
+        const ltc = doraMetrics.lead_time_for_change;
+        summary += `
+#### DORA Metrics
 - **Source:** ${metricsData.source}
-- **Latest:** ${metricsData.latest.tag} @ ${metricsData.latest.created_at}
-- **Deployment Frequency (days):** ${metrics.deployment_frequency_days ?? 'N/A'}
-- **Lead Time for Change:** ${formatHoursToDays(ltc.avg_hours)}
-  - Number of commits: ${ltc.commit_count}
-  - Oldest: ${formatHoursToDays(ltc.oldest_hours)} ${ltc.oldest_commit_sha ? `(${ltc.oldest_commit_sha.substring(0, 7)})` : ''}
-  - Newest: ${formatHoursToDays(ltc.newest_hours)} ${ltc.newest_commit_sha ? `(${ltc.newest_commit_sha.substring(0, 7)})` : ''}
-      `;
+- **Latest:** ${metricsData.latest?.tag} @ ${metricsData.latest?.created_at}
+- **Deployment Frequency (days):** ${doraMetrics.deployment_frequency_days ?? 'N/A'}
+- **Lead Time for Change:** ${formatHoursToDays(ltc?.avg_hours)}
+  - Number of commits: ${ltc?.commit_count || 0}
+  - Oldest: ${formatHoursToDays(ltc?.oldest_hours)} ${ltc?.oldest_commit_sha ? `(${ltc.oldest_commit_sha.substring(0, 7)})` : ''}
+  - Newest: ${formatHoursToDays(ltc?.newest_hours)} ${ltc?.newest_commit_sha ? `(${ltc.newest_commit_sha.substring(0, 7)})` : ''}
+        `;
+      }
+
+      // Add DevEx metrics section if available
+      const devexMetrics = metricsData.metrics?.devex;
+      if (devexMetrics?.pr_size || devexMetrics?.pr_maturity) {
+        summary += `
+#### DevEx Metrics`;
+
+        if (devexMetrics?.pr_size) {
+          const prSize = devexMetrics.pr_size;
+          const emoji = this.getSizeEmoji(prSize.size);
+          summary += `
+- **PR Size:** ${emoji} ${prSize.size.toUpperCase()} (${prSize.category})
+- **Total Changes:** ${prSize.details.total_changes}
+- **Lines Added:** ${prSize.details.total_additions}
+- **Lines Removed:** ${prSize.details.total_deletions}
+- **Files Changed:** ${prSize.details.files_changed}`;
+        }
+
+        if (devexMetrics?.pr_maturity) {
+          const maturity = devexMetrics.pr_maturity;
+          const maturityEmoji = this.getMaturityEmoji(
+            maturity.maturity_percentage
+          );
+          summary += `
+- **PR Maturity:** ${maturityEmoji} ${maturity.maturity_percentage}% (${maturity.maturity_ratio})`;
+
+          if (maturity.details && !maturity.details.error) {
+            summary += `
+- **Total Commits:** ${maturity.details.total_commits}
+- **Stable Changes:** ${maturity.details.stable_changes}
+- **Changes After Publication:** ${maturity.details.changes_after_publication}`;
+          }
+        }
+      }
 
       await coreExports.summary.addRaw(summary).write();
       coreExports.info('Markdown summary created');
     } catch (error) {
       coreExports.warning(`Failed to create markdown summary: ${error.message}`);
     }
+  }
+
+  /**
+   * Get emoji for PR size category
+   * @param {string} size - Size category
+   * @returns {string} Emoji representation
+   */
+  getSizeEmoji(size) {
+    const emojiMap = {
+      xs: '🤏',
+      s: '🔹',
+      m: '🔸',
+      l: '🔶',
+      xl: '🔥'
+    };
+    return emojiMap[size] || '❓'
+  }
+
+  /**
+   * Get emoji for PR maturity percentage
+   * @param {number} percentage - Maturity percentage (0-100)
+   * @returns {string} Emoji representation
+   */
+  getMaturityEmoji(percentage) {
+    if (percentage === null || percentage === undefined) return '❓'
+    if (percentage >= 90) return '🎯'
+    if (percentage >= 75) return '✅'
+    if (percentage >= 50) return '⚠️'
+    if (percentage >= 25) return '🚧'
+    return '❌'
   }
 
   /**
@@ -31982,6 +32797,33 @@ async function run() {
       coreExports.getInput('max-tags') || '100',
       'max-tags'
     );
+    const enableDoraMetrics = validateBoolean(
+      coreExports.getInput('enable-dora-metrics') || 'true',
+      'enable-dora-metrics'
+    );
+    const enableDevExMetrics = validateBoolean(
+      coreExports.getInput('enable-devex-metrics') || 'false',
+      'enable-devex-metrics'
+    );
+    const filesToIgnore = coreExports.getInput('files-to-ignore')
+      .split(',')
+      .map((f) => f.trim())
+      .filter((f) => f.length > 0);
+    const ignoreLineDeletions = validateBoolean(
+      coreExports.getInput('ignore-line-deletions') || 'false',
+      'ignore-line-deletions'
+    );
+    const ignoreFileDeletions = validateBoolean(
+      coreExports.getInput('ignore-file-deletions') || 'false',
+      'ignore-file-deletions'
+    );
+
+    // Validate that at least one metrics type is enabled
+    if (!enableDoraMetrics && !enableDevExMetrics) {
+      throw new Error(
+        'At least one metrics type must be enabled (enable-dora-metrics or enable-devex-metrics)'
+      )
+    }
 
     // Get repository context
     const { owner, repo } = githubExports.context.repo;
@@ -31990,42 +32832,131 @@ async function run() {
     coreExports.debug(
       `Configuration: outputPath=${outputPath}, commitResults=${commitResults}, includeMergeCommits=${includeMergeCommits}`
     );
+    coreExports.debug(
+      `Metrics enabled: DORA=${enableDoraMetrics}, DevEx=${enableDevExMetrics}`
+    );
 
     // Initialize components
     const githubClient = new GitHubClient(githubToken, owner, repo);
-    const metricsCollector = new MetricsCollector(githubClient, {
-      includeMergeCommits,
-      maxReleases,
-      maxTags
-    });
     const outputManager = new OutputManager({
       commitResults,
       outputPath
     });
 
-    // Collect metrics
-    coreExports.info('Collecting deployment frequency and lead time metrics...');
-    const metricsData = await metricsCollector.collectMetrics();
+    let combinedMetricsData = {
+      timestamp: new Date().toISOString(),
+      repository: `${owner}/${repo}`,
+      metrics: {}
+    };
+
+    // Collect DORA metrics if enabled
+    if (enableDoraMetrics) {
+      coreExports.info(
+        'Collecting DORA metrics (deployment frequency and lead time)...'
+      );
+      const metricsCollector = new MetricsCollector(githubClient, {
+        includeMergeCommits,
+        maxReleases,
+        maxTags
+      });
+      const doraMetrics = await metricsCollector.collectMetrics();
+
+      // Merge DORA metrics into combined data
+      combinedMetricsData = {
+        ...combinedMetricsData,
+        ...doraMetrics,
+        metrics: {
+          ...combinedMetricsData.metrics,
+          dora: doraMetrics.metrics || {}
+        }
+      };
+    }
+
+    // Collect DevEx metrics if enabled
+    if (enableDevExMetrics) {
+      coreExports.info(
+        'Collecting DevEx metrics (PR size and developer experience)...'
+      );
+      const devexCollector = new DevExMetricsCollector(githubClient, {
+        filesToIgnore,
+        ignoreLineDeletions,
+        ignoreFileDeletions
+      });
+      const devexMetrics = await devexCollector.collectMetrics();
+
+      // Merge DevEx metrics into combined data
+      combinedMetricsData.metrics.devex = devexMetrics.metrics || {};
+
+      // Add PR comments and labels if we have PR size metrics
+      if (devexMetrics.pr_number && devexMetrics.metrics?.pr_size) {
+        await devexCollector.addPRComment(
+          devexMetrics.pr_number,
+          devexMetrics.metrics.pr_size,
+          devexMetrics.metrics.pr_maturity
+        );
+        await devexCollector.addPRLabel(
+          devexMetrics.pr_number,
+          devexMetrics.metrics.pr_size.category
+        );
+      }
+
+      // Set DevEx-specific outputs
+      if (devexMetrics.metrics?.pr_size) {
+        coreExports.setOutput('pr-size', devexMetrics.metrics.pr_size.size);
+        coreExports.setOutput(
+          'pr-size-category',
+          devexMetrics.metrics.pr_size.category
+        );
+        coreExports.setOutput(
+          'pr-size-details',
+          JSON.stringify(devexMetrics.metrics.pr_size.details)
+        );
+      }
+
+      if (devexMetrics.metrics?.pr_maturity) {
+        coreExports.setOutput(
+          'pr-maturity-ratio',
+          devexMetrics.metrics.pr_maturity.maturity_ratio?.toString() || ''
+        );
+        coreExports.setOutput(
+          'pr-maturity-percentage',
+          devexMetrics.metrics.pr_maturity.maturity_percentage?.toString() || ''
+        );
+        coreExports.setOutput(
+          'pr-maturity-details',
+          JSON.stringify(devexMetrics.metrics.pr_maturity.details)
+        );
+      }
+    }
 
     // Process outputs
     coreExports.info('Processing outputs...');
-    await outputManager.processOutputs(metricsData);
+    await outputManager.processOutputs(combinedMetricsData);
 
     // Log success
-    if (metricsData.error) {
+    if (combinedMetricsData.error) {
       coreExports.warning(
-        `Metrics collection completed with error: ${metricsData.error}`
+        `Metrics collection completed with error: ${combinedMetricsData.error}`
       );
     } else {
       coreExports.info('Metrics collection completed successfully');
-      coreExports.info(`Source: ${metricsData.source}`);
-      coreExports.info(`Latest: ${metricsData.latest.tag}`);
-      coreExports.info(
-        `Deployment frequency: ${metricsData.metrics.deployment_frequency_days ?? 'N/A'} days`
-      );
-      coreExports.info(
-        `Lead time (avg): ${metricsData.metrics.lead_time_for_change.avg_hours ?? 'N/A'} hours`
-      );
+
+      if (enableDoraMetrics && combinedMetricsData.source) {
+        coreExports.info(`DORA Source: ${combinedMetricsData.source}`);
+        coreExports.info(`Latest: ${combinedMetricsData.latest?.tag || 'N/A'}`);
+        coreExports.info(
+          `Deployment frequency: ${combinedMetricsData.metrics?.dora?.deployment_frequency_days ?? 'N/A'} days`
+        );
+        coreExports.info(
+          `Lead time (avg): ${combinedMetricsData.metrics?.dora?.lead_time_for_change?.avg_hours ?? 'N/A'} hours`
+        );
+      }
+
+      if (enableDevExMetrics && combinedMetricsData.metrics?.devex?.pr_size) {
+        coreExports.info(
+          `PR Size: ${combinedMetricsData.metrics.devex.pr_size.size} (${combinedMetricsData.metrics.devex.pr_size.details.total_changes} changes)`
+        );
+      }
     }
   } catch (error) {
     // Fail the workflow run if an error occurs
