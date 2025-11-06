@@ -1,62 +1,159 @@
 /**
- * Unit tests for the action's main functionality, src/main.js
- *
- * To mock dependencies in ESM, you can create fixtures that export mock
- * functions and objects. For example, the core module is mocked in this test,
- * so that the actual '@actions/core' module is not imported.
+ * Unit tests for the main action
  */
-import { jest } from '@jest/globals'
-import * as core from '../__fixtures__/core.js'
-import { wait } from '../__fixtures__/wait.js'
 
-// Mocks should be declared before the module being tested is imported.
-jest.unstable_mockModule('@actions/core', () => core)
-jest.unstable_mockModule('../src/wait.js', () => ({ wait }))
+import { jest, describe, it, expect, beforeEach } from '@jest/globals'
 
-// The module being tested should be imported dynamically. This ensures that the
-// mocks are used in place of any actual dependencies.
+// Mock dependencies
+const mockCore = {
+  getInput: jest.fn(),
+  info: jest.fn(),
+  debug: jest.fn(),
+  warning: jest.fn(),
+  error: jest.fn(),
+  setFailed: jest.fn(),
+  setOutput: jest.fn(),
+  summary: {
+    addRaw: jest.fn(() => ({ write: jest.fn() }))
+  }
+}
+
+const mockGithub = {
+  context: {
+    repo: {
+      owner: 'test-owner',
+      repo: 'test-repo'
+    }
+  }
+}
+
+const mockGitHubClient = {
+  listReleases: jest.fn(),
+  listTags: jest.fn(),
+  resolveTag: jest.fn(),
+  compareCommits: jest.fn(),
+  getCommit: jest.fn()
+}
+
+const mockMetricsCollector = {
+  collectMetrics: jest.fn()
+}
+
+const mockOutputManager = {
+  processOutputs: jest.fn()
+}
+
+// Setup mocks
+jest.unstable_mockModule('@actions/core', () => mockCore)
+jest.unstable_mockModule('@actions/github', () => mockGithub)
+jest.unstable_mockModule('../src/github-client.js', () => ({
+  GitHubClient: jest.fn(() => mockGitHubClient)
+}))
+jest.unstable_mockModule('../src/metrics-collector.js', () => ({
+  MetricsCollector: jest.fn(() => mockMetricsCollector)
+}))
+jest.unstable_mockModule('../src/outputs.js', () => ({
+  OutputManager: jest.fn(() => mockOutputManager)
+}))
+
+// Import the function under test
 const { run } = await import('../src/main.js')
 
-describe('main.js', () => {
+describe('main action', () => {
   beforeEach(() => {
-    // Set the action's inputs as return values from core.getInput().
-    core.getInput.mockImplementation(() => '500')
+    jest.clearAllMocks()
 
-    // Mock the wait function so that it does not actually wait.
-    wait.mockImplementation(() => Promise.resolve('done!'))
+    // Setup default input values
+    mockCore.getInput.mockImplementation((name) => {
+      const inputs = {
+        'github-token': 'test-token',
+        'output-path': 'metrics/delivery_metrics.json',
+        'commit-results': 'true',
+        'include-merge-commits': 'false',
+        'max-releases': '100',
+        'max-tags': '100'
+      }
+      return inputs[name] || ''
+    })
   })
 
-  afterEach(() => {
-    jest.resetAllMocks()
-  })
+  it('should run successfully with valid metrics', async () => {
+    const mockMetrics = {
+      source: 'release',
+      latest: { tag: 'v1.0.0' },
+      metrics: {
+        deployment_frequency_days: 7,
+        lead_time_for_change: {
+          avg_hours: 24
+        }
+      }
+    }
 
-  it('Sets the time output', async () => {
+    mockMetricsCollector.collectMetrics.mockResolvedValue(mockMetrics)
+    mockOutputManager.processOutputs.mockResolvedValue()
+
     await run()
 
-    // Verify the time output was set.
-    expect(core.setOutput).toHaveBeenNthCalledWith(
-      1,
-      'time',
-      // Simple regex to match a time string in the format HH:MM:SS.
-      expect.stringMatching(/^\d{2}:\d{2}:\d{2}/)
+    expect(mockCore.info).toHaveBeenCalledWith(
+      'Collecting metrics for test-owner/test-repo'
+    )
+    expect(mockCore.info).toHaveBeenCalledWith(
+      'Metrics collection completed successfully'
+    )
+    expect(mockCore.setFailed).not.toHaveBeenCalled()
+  })
+
+  it('should handle metrics collection errors gracefully', async () => {
+    const mockMetrics = {
+      error: 'No releases or tags found'
+    }
+
+    mockMetricsCollector.collectMetrics.mockResolvedValue(mockMetrics)
+    mockOutputManager.processOutputs.mockResolvedValue()
+
+    await run()
+
+    expect(mockCore.warning).toHaveBeenCalledWith(
+      'Metrics collection completed with error: No releases or tags found'
+    )
+    expect(mockCore.setFailed).not.toHaveBeenCalled()
+  })
+
+  it('should handle unexpected errors', async () => {
+    const error = new Error('Unexpected error')
+    mockMetricsCollector.collectMetrics.mockRejectedValue(error)
+
+    await run()
+
+    expect(mockCore.error).toHaveBeenCalledWith(
+      'Action failed: Unexpected error'
+    )
+    expect(mockCore.setFailed).toHaveBeenCalledWith('Unexpected error')
+  })
+
+  it('should validate boolean inputs correctly', async () => {
+    mockCore.getInput.mockImplementation((name) => {
+      if (name === 'commit-results') return 'invalid'
+      return 'test-token'
+    })
+
+    await run()
+
+    expect(mockCore.setFailed).toHaveBeenCalledWith(
+      "commit-results must be 'true' or 'false', got: invalid"
     )
   })
 
-  it('Sets a failed status', async () => {
-    // Clear the getInput mock and return an invalid value.
-    core.getInput.mockClear().mockReturnValueOnce('this is not a number')
-
-    // Clear the wait mock and return a rejected promise.
-    wait
-      .mockClear()
-      .mockRejectedValueOnce(new Error('milliseconds is not a number'))
+  it('should validate positive integer inputs correctly', async () => {
+    mockCore.getInput.mockImplementation((name) => {
+      if (name === 'max-releases') return '-1'
+      return name === 'github-token' ? 'test-token' : 'true'
+    })
 
     await run()
 
-    // Verify that the action was marked as failed.
-    expect(core.setFailed).toHaveBeenNthCalledWith(
-      1,
-      'milliseconds is not a number'
+    expect(mockCore.setFailed).toHaveBeenCalledWith(
+      'max-releases must be a positive integer, got: -1'
     )
   })
 })

@@ -1,20 +1,25 @@
 {
-  "name": "javascript-action",
-  "description": "GitHub Actions JavaScript Template",
-  "version": "0.0.0",
-  "author": "",
+  "name": "agile-metrics-action",
+  "description": "GitHub Action to collect deployment frequency and lead time for change metrics",
+  "version": "1.0.0",
+  "author": "xavius-rb",
   "type": "module",
   "private": true,
-  "homepage": "https://github.com/actions/javascript-action#readme",
+  "homepage": "https://github.com/xavius-rb/agile-metrics-action#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/actions/javascript-action.git"
+    "url": "git+https://github.com/xavius-rb/agile-metrics-action.git"
   },
   "bugs": {
-    "url": "https://github.com/actions/javascript-action/issues"
+    "url": "https://github.com/xavius-rb/agile-metrics-action/issues"
   },
   "keywords": [
-    "actions"
+    "actions",
+    "metrics",
+    "agile",
+    "devops",
+    "deployment-frequency",
+    "lead-time"
   ],
   "exports": {
     ".": "./dist/index.js"
@@ -37,7 +42,9 @@
   },
   "license": "MIT",
   "dependencies": {
-    "@actions/core": "^1.11.1"
+    "@actions/core": "^1.11.1",
+    "@actions/exec": "^1.1.1",
+    "@actions/github": "^6.0.1"
   },
   "devDependencies": {
     "@eslint/compat": "^1.3.2",

@@ -1,23 +1,112 @@
-name: The name of your action here
-description: Provide a description here
-author: Your name or organization here
+name: 'Agile Metrics Collector'
+description:
+  'Collect deployment frequency and lead time for change metrics from GitHub
+  repositories'
+author: 'xavius-rb'
 
 # Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
-  icon: heart
-  color: red
+  icon: 'trending-up'
+  color: 'blue'
 
 # Define your inputs here.
 inputs:
-  milliseconds:
-    description: Your input description here
+  github-token:
+    description: 'GitHub token for API access'
     required: true
-    default: '1000'
+    default: ${{ github.token }}
+
+  output-path:
+    description: 'Path where metrics JSON file will be saved'
+    required: false
+    default: 'metrics/delivery_metrics.json'
+
+  commit-results:
+    description: 'Whether to commit the metrics file back to the repository'
+    required: false
+    default: 'true'
+
+  include-merge-commits:
+    description: 'Whether to include merge commits in lead time calculations'
+    required: false
+    default: 'false'
+
+  max-releases:
+    description: 'Maximum number of releases to fetch for analysis'
+    required: false
+    default: '100'
+
+  max-tags:
+    description: 'Maximum number of tags to fetch if no releases are found'
+    required: false
+    default: '100'
+
+  enable-dora-metrics:
+    description: 'Whether to enable DORA metrics collection'
+    required: false
+    default: 'true'
+
+  enable-devex-metrics:
+    description: 'Whether to enable DevEx metrics collection'
+    required: false
+    default: 'false'
+
+  files-to-ignore:
+    description:
+      'Comma-separated list of file patterns to ignore when calculating PR size'
+    required: false
+    default: ''
+
+  ignore-line-deletions:
+    description: 'Whether to ignore line deletions when calculating PR size'
+    required: false
+    default: 'false'
+
+  ignore-file-deletions:
+    description: 'Whether to ignore file deletions when calculating PR size'
+    required: false
+    default: 'false'
 
 # Define your outputs here.
 outputs:
-  time:
-    description: Your output description here
+  metrics-json:
+    description: 'Complete metrics data as JSON string'
+
+  deployment-frequency:
+    description: 'Days between latest and previous deployment'
+
+  lead-time-avg:
+    description: 'Average lead time for change in hours'
+
+  lead-time-oldest:
+    description: 'Oldest commit lead time in hours'
+
+  lead-time-newest:
+    description: 'Newest commit lead time in hours'
+
+  commit-count:
+    description: 'Number of commits analyzed'
+
+  metrics-file-path:
+    description: 'Path to the generated metrics file'
+
+  pr-size:
+    description: 'PR size metric (xs, s, m, l, xl)'
+
+  pr-size-category:
+    description: 'PR size category with size/ prefix'
+
+  pr-size-details:
+    description: 'Detailed PR size metrics as JSON string'
+
+  pr-maturity-ratio:
+    description: 'PR maturity ratio (0.0 to 1.0)'
+
+  pr-maturity-percentage:
+    description: 'PR maturity percentage (0 to 100)'
+
+  pr-maturity-details:
+    description: 'Detailed PR maturity metrics as JSON string'
 
 runs:
   using: node24
