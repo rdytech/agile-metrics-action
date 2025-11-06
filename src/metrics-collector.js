@@ -17,6 +17,10 @@ export class MetricsCollector {
       includeMergeCommits: false,
       maxReleases: 100,
       maxTags: 100,
+      enabledMetrics: {
+        deploymentFrequency: true,
+        leadTime: true
+      },
       ...options
     }
   }
@@ -36,17 +40,25 @@ export class MetricsCollector {
         }
       }
 
-      // Calculate deployment frequency
-      const deploymentFrequencyDays = this.calculateDeploymentFrequency(
-        latest,
-        previous
-      )
+      const metricsData = {}
 
-      // Calculate lead time for change
-      const leadTimeMetrics = await this.calculateLeadTimeForChange(
-        latest,
-        previous
-      )
+      // Calculate deployment frequency if enabled
+      if (this.options.enabledMetrics.deploymentFrequency) {
+        const deploymentFrequencyDays = this.calculateDeploymentFrequency(
+          latest,
+          previous
+        )
+        metricsData.deployment_frequency_days = deploymentFrequencyDays
+      }
+
+      // Calculate lead time for change if enabled
+      if (this.options.enabledMetrics.leadTime) {
+        const leadTimeMetrics = await this.calculateLeadTimeForChange(
+          latest,
+          previous
+        )
+        metricsData.lead_time_for_change = leadTimeMetrics
+      }
 
       // Generate complete metrics object
       const metrics = {
@@ -69,10 +81,7 @@ export class MetricsCollector {
                 : null
             }
           : null,
-        metrics: {
-          deployment_frequency_days: deploymentFrequencyDays,
-          lead_time_for_change: leadTimeMetrics
-        }
+        metrics: metricsData
       }
 
       return metrics

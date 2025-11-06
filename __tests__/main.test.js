@@ -39,6 +39,12 @@ const mockMetricsCollector = {
   collectMetrics: jest.fn()
 }
 
+const mockDevExMetricsCollector = {
+  collectMetrics: jest.fn(),
+  addPRComment: jest.fn(),
+  addPRLabel: jest.fn()
+}
+
 const mockOutputManager = {
   processOutputs: jest.fn()
 }
@@ -51,6 +57,9 @@ jest.unstable_mockModule('../src/github-client.js', () => ({
 }))
 jest.unstable_mockModule('../src/metrics-collector.js', () => ({
   MetricsCollector: jest.fn(() => mockMetricsCollector)
+}))
+jest.unstable_mockModule('../src/devex-metrics-collector.js', () => ({
+  DevExMetricsCollector: jest.fn(() => mockDevExMetricsCollector)
 }))
 jest.unstable_mockModule('../src/outputs.js', () => ({
   OutputManager: jest.fn(() => mockOutputManager)
@@ -71,7 +80,14 @@ describe('main action', () => {
         'commit-results': 'true',
         'include-merge-commits': 'false',
         'max-releases': '100',
-        'max-tags': '100'
+        'max-tags': '100',
+        'deployment-frequency': 'true',
+        'lead-time': 'false',
+        'pr-size': 'false',
+        'pr-maturity': 'false',
+        'files-to-ignore': '',
+        'ignore-line-deletions': 'false',
+        'ignore-file-deletions': 'false'
       }
       return inputs[name] || ''
     })
@@ -100,6 +116,58 @@ describe('main action', () => {
     expect(mockCore.info).toHaveBeenCalledWith(
       'Metrics collection completed successfully'
     )
+    expect(mockCore.setFailed).not.toHaveBeenCalled()
+  })
+
+  it('should require at least one metric to be enabled', async () => {
+    mockCore.getInput.mockImplementation((name) => {
+      const inputs = {
+        'github-token': 'test-token',
+        'deployment-frequency': 'false',
+        'lead-time': 'false',
+        'pr-size': 'false',
+        'pr-maturity': 'false'
+      }
+      return inputs[name] || ''
+    })
+
+    await run()
+
+    expect(mockCore.setFailed).toHaveBeenCalledWith(
+      'At least one metric must be enabled (deployment-frequency, lead-time, pr-size, or pr-maturity)'
+    )
+  })
+
+  it('should collect only enabled metrics', async () => {
+    mockCore.getInput.mockImplementation((name) => {
+      const inputs = {
+        'github-token': 'test-token',
+        'deployment-frequency': 'true',
+        'lead-time': 'true',
+        'pr-size': 'false',
+        'pr-maturity': 'false'
+      }
+      return inputs[name] || ''
+    })
+
+    const mockMetrics = {
+      source: 'release',
+      latest: { tag: 'v1.0.0' },
+      metrics: {
+        deployment_frequency_days: 7,
+        lead_time_for_change: {
+          avg_hours: 24
+        }
+      }
+    }
+
+    mockMetricsCollector.collectMetrics.mockResolvedValue(mockMetrics)
+    mockOutputManager.processOutputs.mockResolvedValue()
+
+    await run()
+
+    expect(mockMetricsCollector.collectMetrics).toHaveBeenCalled()
+    expect(mockDevExMetricsCollector.collectMetrics).not.toHaveBeenCalled()
     expect(mockCore.setFailed).not.toHaveBeenCalled()
   })
 

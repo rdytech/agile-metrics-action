@@ -41,13 +41,23 @@ inputs:
     required: false
     default: '100'
 
-  enable-dora-metrics:
-    description: 'Whether to enable DORA metrics collection'
+  deployment-frequency:
+    description: 'Whether to enable deployment frequency metric collection'
     required: false
-    default: 'true'
+    default: 'false'
 
-  enable-devex-metrics:
-    description: 'Whether to enable DevEx metrics collection'
+  lead-time:
+    description: 'Whether to enable lead time for change metric collection'
+    required: false
+    default: 'false'
+
+  pr-size:
+    description: 'Whether to enable PR size metric collection'
+    required: false
+    default: 'false'
+
+  pr-maturity:
+    description: 'Whether to enable PR maturity metric collection'
     required: false
     default: 'false'
 

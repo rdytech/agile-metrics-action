@@ -17,6 +17,10 @@ export class DevExMetricsCollector {
       filesToIgnore: [],
       ignoreLineDeletions: false,
       ignoreFileDeletions: false,
+      enabledMetrics: {
+        prSize: true,
+        prMaturity: true
+      },
       ...options
     }
   }
@@ -36,18 +40,23 @@ export class DevExMetricsCollector {
 
       core.info(`Collecting DevEx metrics for PR #${prNumber}`)
 
-      // Collect PR size metrics
-      const prSizeMetrics = await this.calculatePRSize(prNumber)
+      const metricsData = {}
 
-      // Collect PR maturity metrics
-      const prMaturityMetrics = await this.calculatePRMaturity(prNumber)
+      // Collect PR size metrics if enabled
+      if (this.options.enabledMetrics.prSize) {
+        const prSizeMetrics = await this.calculatePRSize(prNumber)
+        metricsData.pr_size = prSizeMetrics
+      }
+
+      // Collect PR maturity metrics if enabled
+      if (this.options.enabledMetrics.prMaturity) {
+        const prMaturityMetrics = await this.calculatePRMaturity(prNumber)
+        metricsData.pr_maturity = prMaturityMetrics
+      }
 
       return {
         pr_number: prNumber,
-        metrics: {
-          pr_size: prSizeMetrics,
-          pr_maturity: prMaturityMetrics
-        },
+        metrics: metricsData,
         timestamp: new Date().toISOString()
       }
     } catch (error) {
