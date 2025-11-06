@@ -173,30 +173,30 @@ Helper functions for:
 #### Phase 1: Core Infrastructure
 
 1. Set up basic action structure with proper inputs/outputs
-2. Implement GitHub API client with authentication
-3. Create utility functions for date/time operations
-4. Set up comprehensive error handling
+1. Implement GitHub API client with authentication
+1. Create utility functions for date/time operations
+1. Set up comprehensive error handling
 
 #### Phase 2: Metrics Collection
 
 1. Implement release/tag detection and prioritization
-2. Build deployment frequency calculation
-3. Develop lead time for change logic
-4. Add commit analysis with merge detection
+1. Build deployment frequency calculation
+1. Develop lead time for change logic
+1. Add commit analysis with merge detection
 
 #### Phase 3: Output Generation
 
 1. Create JSON output formatting
-2. Implement Markdown summary generation
-3. Add file system operations
-4. Integrate Git commit functionality
+1. Implement Markdown summary generation
+1. Add file system operations
+1. Integrate Git commit functionality
 
 #### Phase 4: Testing & Validation
 
 1. Unit tests for all core functions
-2. Integration tests with mock GitHub data
-3. End-to-end testing with real repositories
-4. Performance optimization
+1. Integration tests with mock GitHub data
+1. End-to-end testing with real repositories
+1. Performance optimization
 
 ### Configuration Examples
 
@@ -231,9 +231,11 @@ Helper functions for:
 
 - name: Upload to Analytics
   run: |
-    echo "Deployment frequency: ${{ steps.metrics.outputs.deployment-frequency }} days"
+    echo "Deployment frequency: \
+      ${{ steps.metrics.outputs.deployment-frequency }} days"
     echo "Average lead time: ${{ steps.metrics.outputs.lead-time-avg }} hours"
-    curl -X POST $ANALYTICS_URL -d '${{ steps.metrics.outputs.metrics-json }}'
+    curl -X POST $ANALYTICS_URL \
+      -d '${{ steps.metrics.outputs.metrics-json }}'
 ```
 
 ### Technical Considerations
@@ -292,16 +294,16 @@ Helper functions for:
 #### For Existing Users
 
 1. Replace workflow step with action usage
-2. Map existing outputs to new action outputs
-3. Update any dependent workflows
-4. Test with existing repository configurations
+1. Map existing outputs to new action outputs
+1. Update any dependent workflows
+1. Test with existing repository configurations
 
 #### Validation Steps
 
 1. Compare outputs between old workflow and new action
-2. Verify metric accuracy across different repository types
-3. Test performance with large repositories
-4. Validate error handling improvements
+1. Verify metric accuracy across different repository types
+1. Test performance with large repositories
+1. Validate error handling improvements
 
 ### Future Enhancements
 

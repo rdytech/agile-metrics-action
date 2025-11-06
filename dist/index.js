@@ -31697,6 +31697,10 @@ class MetricsCollector {
       includeMergeCommits: false,
       maxReleases: 100,
       maxTags: 100,
+      enabledMetrics: {
+        deploymentFrequency: true,
+        leadTime: true
+      },
       ...options
     };
   }
@@ -31716,17 +31720,25 @@ class MetricsCollector {
         }
       }
 
-      // Calculate deployment frequency
-      const deploymentFrequencyDays = this.calculateDeploymentFrequency(
-        latest,
-        previous
-      );
+      const metricsData = {};
 
-      // Calculate lead time for change
-      const leadTimeMetrics = await this.calculateLeadTimeForChange(
-        latest,
-        previous
-      );
+      // Calculate deployment frequency if enabled
+      if (this.options.enabledMetrics.deploymentFrequency) {
+        const deploymentFrequencyDays = this.calculateDeploymentFrequency(
+          latest,
+          previous
+        );
+        metricsData.deployment_frequency_days = deploymentFrequencyDays;
+      }
+
+      // Calculate lead time for change if enabled
+      if (this.options.enabledMetrics.leadTime) {
+        const leadTimeMetrics = await this.calculateLeadTimeForChange(
+          latest,
+          previous
+        );
+        metricsData.lead_time_for_change = leadTimeMetrics;
+      }
 
       // Generate complete metrics object
       const metrics = {
@@ -31749,10 +31761,7 @@ class MetricsCollector {
                 : null
             }
           : null,
-        metrics: {
-          deployment_frequency_days: deploymentFrequencyDays,
-          lead_time_for_change: leadTimeMetrics
-        }
+        metrics: metricsData
       };
 
       return metrics
@@ -31946,6 +31955,10 @@ class DevExMetricsCollector {
       filesToIgnore: [],
       ignoreLineDeletions: false,
       ignoreFileDeletions: false,
+      enabledMetrics: {
+        prSize: true,
+        prMaturity: true
+      },
       ...options
     };
   }
@@ -31965,18 +31978,23 @@ class DevExMetricsCollector {
 
       coreExports.info(`Collecting DevEx metrics for PR #${prNumber}`);
 
-      // Collect PR size metrics
-      const prSizeMetrics = await this.calculatePRSize(prNumber);
+      const metricsData = {};
 
-      // Collect PR maturity metrics
-      const prMaturityMetrics = await this.calculatePRMaturity(prNumber);
+      // Collect PR size metrics if enabled
+      if (this.options.enabledMetrics.prSize) {
+        const prSizeMetrics = await this.calculatePRSize(prNumber);
+        metricsData.pr_size = prSizeMetrics;
+      }
+
+      // Collect PR maturity metrics if enabled
+      if (this.options.enabledMetrics.prMaturity) {
+        const prMaturityMetrics = await this.calculatePRMaturity(prNumber);
+        metricsData.pr_maturity = prMaturityMetrics;
+      }
 
       return {
         pr_number: prNumber,
-        metrics: {
-          pr_size: prSizeMetrics,
-          pr_maturity: prMaturityMetrics
-        },
+        metrics: metricsData,
         timestamp: new Date().toISOString()
       }
     } catch (error) {
@@ -32797,13 +32815,21 @@ async function run() {
       coreExports.getInput('max-tags') || '100',
       'max-tags'
     );
-    const enableDoraMetrics = validateBoolean(
-      coreExports.getInput('enable-dora-metrics') || 'true',
-      'enable-dora-metrics'
+    const enableDeploymentFrequency = validateBoolean(
+      coreExports.getInput('deployment-frequency') || 'false',
+      'deployment-frequency'
     );
-    const enableDevExMetrics = validateBoolean(
-      coreExports.getInput('enable-devex-metrics') || 'false',
-      'enable-devex-metrics'
+    const enableLeadTime = validateBoolean(
+      coreExports.getInput('lead-time') || 'false',
+      'lead-time'
+    );
+    const enablePrSize = validateBoolean(
+      coreExports.getInput('pr-size') || 'false',
+      'pr-size'
+    );
+    const enablePrMaturity = validateBoolean(
+      coreExports.getInput('pr-maturity') || 'false',
+      'pr-maturity'
     );
     const filesToIgnore = coreExports.getInput('files-to-ignore')
       .split(',')
@@ -32818,12 +32844,21 @@ async function run() {
       'ignore-file-deletions'
     );
 
-    // Validate that at least one metrics type is enabled
-    if (!enableDoraMetrics && !enableDevExMetrics) {
+    // Validate that at least one metric is enabled
+    if (
+      !enableDeploymentFrequency &&
+      !enableLeadTime &&
+      !enablePrSize &&
+      !enablePrMaturity
+    ) {
       throw new Error(
-        'At least one metrics type must be enabled (enable-dora-metrics or enable-devex-metrics)'
+        'At least one metric must be enabled (deployment-frequency, lead-time, pr-size, or pr-maturity)'
       )
     }
+
+    // Determine if we need DORA or DevEx collectors based on enabled metrics
+    const needDoraMetrics = enableDeploymentFrequency || enableLeadTime;
+    const needDevExMetrics = enablePrSize || enablePrMaturity;
 
     // Get repository context
     const { owner, repo } = githubExports.context.repo;
@@ -32833,7 +32868,7 @@ async function run() {
       `Configuration: outputPath=${outputPath}, commitResults=${commitResults}, includeMergeCommits=${includeMergeCommits}`
     );
     coreExports.debug(
-      `Metrics enabled: DORA=${enableDoraMetrics}, DevEx=${enableDevExMetrics}`
+      `Metrics enabled: Deployment Frequency=${enableDeploymentFrequency}, Lead Time=${enableLeadTime}, PR Size=${enablePrSize}, PR Maturity=${enablePrMaturity}`
     );
 
     // Initialize components
@@ -32849,15 +32884,25 @@ async function run() {
       metrics: {}
     };
 
-    // Collect DORA metrics if enabled
-    if (enableDoraMetrics) {
-      coreExports.info(
-        'Collecting DORA metrics (deployment frequency and lead time)...'
-      );
+    // Collect DORA metrics if any are enabled
+    if (needDoraMetrics) {
+      const enabledDoraMetrics = [];
+      if (enableDeploymentFrequency) {
+        enabledDoraMetrics.push('deployment frequency');
+      }
+      if (enableLeadTime) {
+        enabledDoraMetrics.push('lead time');
+      }
+
+      coreExports.info(`Collecting DORA metrics: ${enabledDoraMetrics.join(', ')}...`);
       const metricsCollector = new MetricsCollector(githubClient, {
         includeMergeCommits,
         maxReleases,
-        maxTags
+        maxTags,
+        enabledMetrics: {
+          deploymentFrequency: enableDeploymentFrequency,
+          leadTime: enableLeadTime
+        }
       });
       const doraMetrics = await metricsCollector.collectMetrics();
 
@@ -32872,15 +32917,23 @@ async function run() {
       };
     }
 
-    // Collect DevEx metrics if enabled
-    if (enableDevExMetrics) {
+    // Collect DevEx metrics if any are enabled
+    if (needDevExMetrics) {
+      const enabledDevExMetrics = [];
+      if (enablePrSize) enabledDevExMetrics.push('PR size');
+      if (enablePrMaturity) enabledDevExMetrics.push('PR maturity');
+
       coreExports.info(
-        'Collecting DevEx metrics (PR size and developer experience)...'
+        `Collecting DevEx metrics: ${enabledDevExMetrics.join(', ')}...`
       );
       const devexCollector = new DevExMetricsCollector(githubClient, {
         filesToIgnore,
         ignoreLineDeletions,
-        ignoreFileDeletions
+        ignoreFileDeletions,
+        enabledMetrics: {
+          prSize: enablePrSize,
+          prMaturity: enablePrMaturity
+        }
       });
       const devexMetrics = await devexCollector.collectMetrics();
 
@@ -32888,7 +32941,11 @@ async function run() {
       combinedMetricsData.metrics.devex = devexMetrics.metrics || {};
 
       // Add PR comments and labels if we have PR size metrics
-      if (devexMetrics.pr_number && devexMetrics.metrics?.pr_size) {
+      if (
+        devexMetrics.pr_number &&
+        devexMetrics.metrics?.pr_size &&
+        enablePrSize
+      ) {
         await devexCollector.addPRComment(
           devexMetrics.pr_number,
           devexMetrics.metrics.pr_size,
@@ -32901,7 +32958,7 @@ async function run() {
       }
 
       // Set DevEx-specific outputs
-      if (devexMetrics.metrics?.pr_size) {
+      if (devexMetrics.metrics?.pr_size && enablePrSize) {
         coreExports.setOutput('pr-size', devexMetrics.metrics.pr_size.size);
         coreExports.setOutput(
           'pr-size-category',
@@ -32913,7 +32970,7 @@ async function run() {
         );
       }
 
-      if (devexMetrics.metrics?.pr_maturity) {
+      if (devexMetrics.metrics?.pr_maturity && enablePrMaturity) {
         coreExports.setOutput(
           'pr-maturity-ratio',
           devexMetrics.metrics.pr_maturity.maturity_ratio?.toString() || ''
@@ -32941,20 +32998,32 @@ async function run() {
     } else {
       coreExports.info('Metrics collection completed successfully');
 
-      if (enableDoraMetrics && combinedMetricsData.source) {
+      if (needDoraMetrics && combinedMetricsData.source) {
         coreExports.info(`DORA Source: ${combinedMetricsData.source}`);
         coreExports.info(`Latest: ${combinedMetricsData.latest?.tag || 'N/A'}`);
+
+        if (enableDeploymentFrequency) {
+          coreExports.info(
+            `Deployment frequency: ${combinedMetricsData.metrics?.dora?.deployment_frequency_days ?? 'N/A'} days`
+          );
+        }
+
+        if (enableLeadTime) {
+          coreExports.info(
+            `Lead time (avg): ${combinedMetricsData.metrics?.dora?.lead_time_for_change?.avg_hours ?? 'N/A'} hours`
+          );
+        }
+      }
+
+      if (enablePrSize && combinedMetricsData.metrics?.devex?.pr_size) {
         coreExports.info(
-          `Deployment frequency: ${combinedMetricsData.metrics?.dora?.deployment_frequency_days ?? 'N/A'} days`
-        );
-        coreExports.info(
-          `Lead time (avg): ${combinedMetricsData.metrics?.dora?.lead_time_for_change?.avg_hours ?? 'N/A'} hours`
+          `PR Size: ${combinedMetricsData.metrics.devex.pr_size.size} (${combinedMetricsData.metrics.devex.pr_size.details.total_changes} changes)`
         );
       }
 
-      if (enableDevExMetrics && combinedMetricsData.metrics?.devex?.pr_size) {
+      if (enablePrMaturity && combinedMetricsData.metrics?.devex?.pr_maturity) {
         coreExports.info(
-          `PR Size: ${combinedMetricsData.metrics.devex.pr_size.size} (${combinedMetricsData.metrics.devex.pr_size.details.total_changes} changes)`
+          `PR Maturity: ${combinedMetricsData.metrics.devex.pr_maturity.maturity_percentage ?? 'N/A'}%`
         );
       }
     }

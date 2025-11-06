@@ -103,11 +103,11 @@ The combined PR comment provides valuable insights:
 
 1. **Development Planning**: Size indicates review complexity and time
    requirements
-2. **Code Quality**: Maturity reflects preparation quality and development
+1. **Code Quality**: Maturity reflects preparation quality and development
    practices
-3. **Process Improvement**: Low maturity scores can indicate areas for developer
+1. **Process Improvement**: Low maturity scores can indicate areas for developer
    coaching
-4. **Team Metrics**: Track improvements in both size management and code
+1. **Team Metrics**: Track improvements in both size management and code
    stability over time
 
 ## Customization

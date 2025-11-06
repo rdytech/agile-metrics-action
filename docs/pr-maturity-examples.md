@@ -11,7 +11,7 @@ commit) and total changes made after publication.
 
 **Formula:**
 
-```
+```text
 Maturity Ratio = Stable Changes / Total Changes
 Maturity Percentage = Maturity Ratio × 100
 ```
@@ -26,7 +26,7 @@ Where:
 
 ### Scenario 1: Perfect Maturity (100%)
 
-```
+```text
 Initial PR: 50 changes
 Additional commits: 0 changes
 Total changes: 50
@@ -38,7 +38,7 @@ Rating: 🎯 Excellent
 
 ### Scenario 2: High Maturity (90%)
 
-```
+```text
 Initial PR: 100 changes
 Additional commits: 10 changes
 Total changes: 110
@@ -50,7 +50,7 @@ Rating: 🎯 Excellent
 
 ### Scenario 3: Good Maturity (75%)
 
-```
+```text
 Initial PR: 80 changes
 Additional commits: 20 changes
 Total changes: 100
@@ -62,7 +62,7 @@ Rating: ✅ Good
 
 ### Scenario 4: Poor Maturity (25%)
 
-```
+```text
 Initial PR: 50 changes
 Additional commits: 150 changes
 Total changes: 200
@@ -108,10 +108,10 @@ Rating: 🚧 Poor
 
 1. **Aim for >90% maturity** by thoroughly testing and reviewing code before
    creating the PR
-2. **Use draft PRs** for work-in-progress to avoid penalizing maturity scores
-3. **Break large features** into smaller, more manageable PRs
-4. **Consider maturity trends** over time rather than individual PR scores
-5. **Use maturity data** to identify areas for developer coaching and process
+1. **Use draft PRs** for work-in-progress to avoid penalizing maturity scores
+1. **Break large features** into smaller, more manageable PRs
+1. **Consider maturity trends** over time rather than individual PR scores
+1. **Use maturity data** to identify areas for developer coaching and process
    improvement
 
 ## Configuration Impact

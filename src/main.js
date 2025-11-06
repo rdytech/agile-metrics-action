@@ -38,13 +38,21 @@ export async function run() {
       core.getInput('max-tags') || '100',
       'max-tags'
     )
-    const enableDoraMetrics = validateBoolean(
-      core.getInput('enable-dora-metrics') || 'true',
-      'enable-dora-metrics'
+    const enableDeploymentFrequency = validateBoolean(
+      core.getInput('deployment-frequency') || 'false',
+      'deployment-frequency'
     )
-    const enableDevExMetrics = validateBoolean(
-      core.getInput('enable-devex-metrics') || 'false',
-      'enable-devex-metrics'
+    const enableLeadTime = validateBoolean(
+      core.getInput('lead-time') || 'false',
+      'lead-time'
+    )
+    const enablePrSize = validateBoolean(
+      core.getInput('pr-size') || 'false',
+      'pr-size'
+    )
+    const enablePrMaturity = validateBoolean(
+      core.getInput('pr-maturity') || 'false',
+      'pr-maturity'
     )
     const filesToIgnore = core
       .getInput('files-to-ignore')
@@ -60,12 +68,21 @@ export async function run() {
       'ignore-file-deletions'
     )
 
-    // Validate that at least one metrics type is enabled
-    if (!enableDoraMetrics && !enableDevExMetrics) {
+    // Validate that at least one metric is enabled
+    if (
+      !enableDeploymentFrequency &&
+      !enableLeadTime &&
+      !enablePrSize &&
+      !enablePrMaturity
+    ) {
       throw new Error(
-        'At least one metrics type must be enabled (enable-dora-metrics or enable-devex-metrics)'
+        'At least one metric must be enabled (deployment-frequency, lead-time, pr-size, or pr-maturity)'
       )
     }
+
+    // Determine if we need DORA or DevEx collectors based on enabled metrics
+    const needDoraMetrics = enableDeploymentFrequency || enableLeadTime
+    const needDevExMetrics = enablePrSize || enablePrMaturity
 
     // Get repository context
     const { owner, repo } = github.context.repo
@@ -75,7 +92,7 @@ export async function run() {
       `Configuration: outputPath=${outputPath}, commitResults=${commitResults}, includeMergeCommits=${includeMergeCommits}`
     )
     core.debug(
-      `Metrics enabled: DORA=${enableDoraMetrics}, DevEx=${enableDevExMetrics}`
+      `Metrics enabled: Deployment Frequency=${enableDeploymentFrequency}, Lead Time=${enableLeadTime}, PR Size=${enablePrSize}, PR Maturity=${enablePrMaturity}`
     )
 
     // Initialize components
@@ -91,15 +108,25 @@ export async function run() {
       metrics: {}
     }
 
-    // Collect DORA metrics if enabled
-    if (enableDoraMetrics) {
-      core.info(
-        'Collecting DORA metrics (deployment frequency and lead time)...'
-      )
+    // Collect DORA metrics if any are enabled
+    if (needDoraMetrics) {
+      const enabledDoraMetrics = []
+      if (enableDeploymentFrequency) {
+        enabledDoraMetrics.push('deployment frequency')
+      }
+      if (enableLeadTime) {
+        enabledDoraMetrics.push('lead time')
+      }
+
+      core.info(`Collecting DORA metrics: ${enabledDoraMetrics.join(', ')}...`)
       const metricsCollector = new MetricsCollector(githubClient, {
         includeMergeCommits,
         maxReleases,
-        maxTags
+        maxTags,
+        enabledMetrics: {
+          deploymentFrequency: enableDeploymentFrequency,
+          leadTime: enableLeadTime
+        }
       })
       const doraMetrics = await metricsCollector.collectMetrics()
 
@@ -114,15 +141,23 @@ export async function run() {
       }
     }
 
-    // Collect DevEx metrics if enabled
-    if (enableDevExMetrics) {
+    // Collect DevEx metrics if any are enabled
+    if (needDevExMetrics) {
+      const enabledDevExMetrics = []
+      if (enablePrSize) enabledDevExMetrics.push('PR size')
+      if (enablePrMaturity) enabledDevExMetrics.push('PR maturity')
+
       core.info(
-        'Collecting DevEx metrics (PR size and developer experience)...'
+        `Collecting DevEx metrics: ${enabledDevExMetrics.join(', ')}...`
       )
       const devexCollector = new DevExMetricsCollector(githubClient, {
         filesToIgnore,
         ignoreLineDeletions,
-        ignoreFileDeletions
+        ignoreFileDeletions,
+        enabledMetrics: {
+          prSize: enablePrSize,
+          prMaturity: enablePrMaturity
+        }
       })
       const devexMetrics = await devexCollector.collectMetrics()
 
@@ -130,7 +165,11 @@ export async function run() {
       combinedMetricsData.metrics.devex = devexMetrics.metrics || {}
 
       // Add PR comments and labels if we have PR size metrics
-      if (devexMetrics.pr_number && devexMetrics.metrics?.pr_size) {
+      if (
+        devexMetrics.pr_number &&
+        devexMetrics.metrics?.pr_size &&
+        enablePrSize
+      ) {
         await devexCollector.addPRComment(
           devexMetrics.pr_number,
           devexMetrics.metrics.pr_size,
@@ -143,7 +182,7 @@ export async function run() {
       }
 
       // Set DevEx-specific outputs
-      if (devexMetrics.metrics?.pr_size) {
+      if (devexMetrics.metrics?.pr_size && enablePrSize) {
         core.setOutput('pr-size', devexMetrics.metrics.pr_size.size)
         core.setOutput(
           'pr-size-category',
@@ -155,7 +194,7 @@ export async function run() {
         )
       }
 
-      if (devexMetrics.metrics?.pr_maturity) {
+      if (devexMetrics.metrics?.pr_maturity && enablePrMaturity) {
         core.setOutput(
           'pr-maturity-ratio',
           devexMetrics.metrics.pr_maturity.maturity_ratio?.toString() || ''
@@ -183,20 +222,32 @@ export async function run() {
     } else {
       core.info('Metrics collection completed successfully')
 
-      if (enableDoraMetrics && combinedMetricsData.source) {
+      if (needDoraMetrics && combinedMetricsData.source) {
         core.info(`DORA Source: ${combinedMetricsData.source}`)
         core.info(`Latest: ${combinedMetricsData.latest?.tag || 'N/A'}`)
+
+        if (enableDeploymentFrequency) {
+          core.info(
+            `Deployment frequency: ${combinedMetricsData.metrics?.dora?.deployment_frequency_days ?? 'N/A'} days`
+          )
+        }
+
+        if (enableLeadTime) {
+          core.info(
+            `Lead time (avg): ${combinedMetricsData.metrics?.dora?.lead_time_for_change?.avg_hours ?? 'N/A'} hours`
+          )
+        }
+      }
+
+      if (enablePrSize && combinedMetricsData.metrics?.devex?.pr_size) {
         core.info(
-          `Deployment frequency: ${combinedMetricsData.metrics?.dora?.deployment_frequency_days ?? 'N/A'} days`
-        )
-        core.info(
-          `Lead time (avg): ${combinedMetricsData.metrics?.dora?.lead_time_for_change?.avg_hours ?? 'N/A'} hours`
+          `PR Size: ${combinedMetricsData.metrics.devex.pr_size.size} (${combinedMetricsData.metrics.devex.pr_size.details.total_changes} changes)`
         )
       }
 
-      if (enableDevExMetrics && combinedMetricsData.metrics?.devex?.pr_size) {
+      if (enablePrMaturity && combinedMetricsData.metrics?.devex?.pr_maturity) {
         core.info(
-          `PR Size: ${combinedMetricsData.metrics.devex.pr_size.size} (${combinedMetricsData.metrics.devex.pr_size.details.total_changes} changes)`
+          `PR Maturity: ${combinedMetricsData.metrics.devex.pr_maturity.maturity_percentage ?? 'N/A'}%`
         )
       }
     }

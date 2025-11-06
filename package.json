@@ -1,7 +1,7 @@
 {
   "name": "agile-metrics-action",
   "description": "GitHub Action to collect deployment frequency and lead time for change metrics",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "author": "xavius-rb",
   "type": "module",
   "private": true,

@@ -42,21 +42,22 @@ including:
 
 **General:**
 
-- �📝 **Rich Output**: Provides JSON data, individual metrics, and Markdown
+- 📝 **Rich Output**: Provides JSON data, individual metrics, and Markdown
   summaries
 - 🔄 **Git Integration**: Optionally commits metrics back to the repository
 - ⚡ **Fast & Reliable**: Built with robust error handling and performance
   optimization
-- 🔀 **Independent Metrics**: DORA and DevEx metrics can be enabled separately
+- 🔀 **Independent Metrics**: Each metric can be enabled/disabled individually
+  for maximum flexibility
 
 ## Usage
 
 ### Basic Usage
 
-#### DORA Metrics (Deployment & Lead Time)
+#### Deployment Frequency Metric
 
 ```yaml
-name: Collect DORA Metrics
+name: Collect Deployment Frequency
 
 on:
   schedule:
@@ -69,15 +70,37 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Collect DORA Metrics
-        uses: xavius-rb/agile-metrics-action@v1
+      - name: Collect Deployment Frequency
+        uses: xavius-rb/agile-metrics-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          enable-dora-metrics: 'true'
-          enable-devex-metrics: 'false'
+          deployment-frequency: 'true'
 ```
 
-#### DevEx Metrics (PR Size Analysis)
+#### Lead Time Metric
+
+```yaml
+name: Collect Lead Time
+
+on:
+  schedule:
+    - cron: '0 9 * * 1' # Every Monday at 9 AM UTC
+  workflow_dispatch:
+
+jobs:
+  metrics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect Lead Time
+        uses: xavius-rb/agile-metrics-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          lead-time: 'true'
+```
+
+#### PR Size Analysis
 
 ```yaml
 name: PR Size Analysis
@@ -93,23 +116,44 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Analyze PR Size
-        uses: xavius-rb/agile-metrics-action@v1
+        uses: xavius-rb/agile-metrics-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          enable-dora-metrics: 'false'
-          enable-devex-metrics: 'true'
+          pr-size: 'true'
           files-to-ignore: '*.md,*.txt,package-lock.json'
           ignore-line-deletions: 'false'
 ```
 
+#### PR Maturity Analysis
+
+```yaml
+name: PR Maturity Analysis
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  pr-maturity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Analyze PR Maturity
+        uses: xavius-rb/agile-metrics-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          pr-maturity: 'true'
+```
+
 ### Advanced Configuration
 
-#### Combined DORA and DevEx Metrics
+#### Combined Metrics
 
 ```yaml
 - name: Collect All Metrics
   id: metrics
-  uses: xavius-rb/agile-metrics-action@v1
+  uses: xavius-rb/agile-metrics-action@v2
   with:
     github-token: ${{ secrets.GITHUB_TOKEN }}
 
@@ -117,40 +161,53 @@ jobs:
     output-path: 'reports/metrics.json'
     commit-results: 'false'
 
-    # Enable both metric types
-    enable-dora-metrics: 'true'
-    enable-devex-metrics: 'true'
+    # Enable specific metrics
+    deployment-frequency: 'true'
+    lead-time: 'true'
+    pr-size: 'true'
+    pr-maturity: 'true'
 
-    # DORA configuration
+    # DORA configuration (applies to deployment-frequency and lead-time)
     include-merge-commits: 'true'
     max-releases: '50'
     max-tags: '100'
 
-    # DevEx configuration
+    # DevEx configuration (applies to pr-size and pr-maturity)
     files-to-ignore: '*.md,*.txt,package-lock.json,yarn.lock'
     ignore-line-deletions: 'false'
     ignore-file-deletions: 'true'
 
 - name: Use Metrics
   run: |
-    echo "Deployment frequency: ${{ steps.metrics.outputs.deployment-frequency }} days"
+    echo "Deployment frequency: \
+      ${{ steps.metrics.outputs.deployment-frequency }} days"
     echo "Average lead time: ${{ steps.metrics.outputs.lead-time-avg }} hours"
     echo "PR size: ${{ steps.metrics.outputs.pr-size }}"
+    echo "PR maturity: ${{ steps.metrics.outputs.pr-maturity-percentage }}%"
 ```
 
 ## Inputs
 
 ### General Inputs
 
-| Input                  | Description                                               | Required | Default                         |
-| ---------------------- | --------------------------------------------------------- | -------- | ------------------------------- |
-| `github-token`         | GitHub token for API access                               | ✅       | `${{ github.token }}`           |
-| `output-path`          | Path where metrics JSON file will be saved                | ❌       | `metrics/delivery_metrics.json` |
-| `commit-results`       | Whether to commit the metrics file back to the repository | ❌       | `true`                          |
-| `enable-dora-metrics`  | Whether to enable DORA metrics collection                 | ❌       | `true`                          |
-| `enable-devex-metrics` | Whether to enable DevEx metrics collection                | ❌       | `false`                         |
+| Input            | Description                                               | Required | Default                         |
+| ---------------- | --------------------------------------------------------- | -------- | ------------------------------- |
+| `github-token`   | GitHub token for API access                               | ✅       | `${{ github.token }}`           |
+| `output-path`    | Path where metrics JSON file will be saved                | ❌       | `metrics/delivery_metrics.json` |
+| `commit-results` | Whether to commit the metrics file back to the repository | ❌       | `true`                          |
 
-### DORA Metrics Inputs
+### Metric-Specific Inputs
+
+| Input                  | Description                                   | Required | Default |
+| ---------------------- | --------------------------------------------- | -------- | ------- |
+| `deployment-frequency` | Whether to enable deployment frequency metric | ❌       | `false` |
+| `lead-time`            | Whether to enable lead time for change metric | ❌       | `false` |
+| `pr-size`              | Whether to enable PR size metric              | ❌       | `false` |
+| `pr-maturity`          | Whether to enable PR maturity metric          | ❌       | `false` |
+
+### DORA Metrics Configuration
+
+Applies to `deployment-frequency` and `lead-time` metrics.
 
 | Input                   | Description                                                | Required | Default |
 | ----------------------- | ---------------------------------------------------------- | -------- | ------- |
@@ -158,7 +215,9 @@ jobs:
 | `max-releases`          | Maximum number of releases to fetch for analysis           | ❌       | `100`   |
 | `max-tags`              | Maximum number of tags to fetch if no releases are found   | ❌       | `100`   |
 
-### DevEx Metrics Inputs
+### DevEx Metrics Configuration
+
+Applies to `pr-size` and `pr-maturity` metrics.
 
 | Input                   | Description                                                 | Required | Default |
 | ----------------------- | ----------------------------------------------------------- | -------- | ------- |
@@ -271,34 +330,17 @@ added after publication.
 - Measure the effectiveness of code review processes
 - Monitor the stability of feature development
 
-- **Elite**: On-demand (multiple deployments per day)
-- **High**: Between once per day and once per week
-- **Medium**: Between once per week and once per month
-- **Low**: Fewer than once per month
-
-### Lead Time for Change
-
-Measures the time from when code is committed to when it's successfully running
-in production.
-
-- **Average**: Mean time across all commits in the release
-- **Oldest**: The commit that took the longest time to deploy
-- **Newest**: The most recent commit (excludes merge commits by default)
-
-The action analyzes commits between releases/tags and calculates the time from
-commit timestamp to release timestamp.
-
 ## How It Works
 
 1. **Data Source Detection**: The action first looks for GitHub releases, then
    falls back to tags if no releases are found
-2. **Release Analysis**: Compares the latest and previous releases/tags to
+1. **Release Analysis**: Compares the latest and previous releases/tags to
    calculate deployment frequency
-3. **Commit Analysis**: Examines all commits between releases to calculate lead
+1. **Commit Analysis**: Examines all commits between releases to calculate lead
    time metrics
-4. **Output Generation**: Creates JSON file, sets GitHub Actions outputs, and
+1. **Output Generation**: Creates JSON file, sets GitHub Actions outputs, and
    generates markdown summary
-5. **Optional Commit**: Can commit the metrics file back to the repository for
+1. **Optional Commit**: Can commit the metrics file back to the repository for
    tracking over time
 
 ## Output Format
@@ -340,11 +382,54 @@ The action generates a comprehensive JSON file with the following structure:
 ## Contributing
 
 1. Install dependencies: `npm install`
-2. Run tests: `npm test`
-3. Bundle the action: `npm run bundle`
-4. Create a pull request
+1. Run tests: `npm test`
+1. Bundle the action: `npm run bundle`
+1. Create a pull request
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 for details.
+
+## Migration Guide
+
+### Upgrading from v1 to v2
+
+Version 2.0.0 introduces a **breaking change** in how metrics are enabled. The
+high-level `enable-dora-metrics` and `enable-devex-metrics` inputs have been
+replaced with individual metric toggles.
+
+#### v1.x Configuration
+
+```yaml
+- uses: xavius-rb/agile-metrics-action@v1
+  with:
+    enable-dora-metrics: 'true'
+    enable-devex-metrics: 'true'
+```
+
+#### v2.x Configuration
+
+```yaml
+- uses: xavius-rb/agile-metrics-action@v2
+  with:
+    deployment-frequency: 'true'
+    lead-time: 'true'
+    pr-size: 'true'
+    pr-maturity: 'true'
+```
+
+**Key Changes:**
+
+1. `enable-dora-metrics: 'true'` → `deployment-frequency: 'true'` +
+   `lead-time: 'true'`
+1. `enable-devex-metrics: 'true'` → `pr-size: 'true'` + `pr-maturity: 'true'`
+1. By default, **all metrics are now disabled** (changed from v1 where DORA
+   metrics were enabled by default)
+1. You must explicitly enable each metric you want to collect
+
+**Benefits:**
+
+1. Fine-grained control over which metrics to collect
+1. Reduced API calls and processing time when you only need specific metrics
+1. More flexible for different use cases and workflows

@@ -296,7 +296,7 @@ jobs:
 
       - name: Upload metrics artifact (PR mode)
         if: github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: delivery-metrics
           path: metrics/delivery_metrics.json
