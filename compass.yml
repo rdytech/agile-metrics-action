@@ -1,0 +1,16 @@
+name: agile-metrics-action
+id: ari:cloud:compass:b71429b6-6915-472c-948c-0437002aef05:component/0b741787-3729-488e-a684-631aa8b59094/7690d2eb-b1cc-4a4a-b8f8-bc47180a2145
+description: Custom DevEx metrics
+configVersion: 1
+typeId: SERVICE
+fields:
+  tier: 4
+links:
+  - name: null
+    type: REPOSITORY
+    url: https://github.com/rdytech/agile-metrics-action
+relationships:
+  DEPENDS_ON: []
+labels:
+  - source:github
+customFields: null
