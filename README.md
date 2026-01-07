@@ -20,6 +20,13 @@ including:
   comments
 - **PR Maturity**: Ratio of stable code vs changes made after PR publication
 
+**Team Metrics:**
+
+- **Pickup Time**: Time from PR creation to first review
+- **Approve Time**: Time from first comment to approval
+- **Merge Time**: Time from approval to merge
+- **Merge Frequency**: Number of PRs merged per developer per week
+
 ## Features
 
 **DORA Metrics:**
@@ -39,6 +46,15 @@ including:
 - 🔍 **Smart Filtering**: Ignore specific files, line deletions, or file
   deletions
 - 📐 **Flexible Sizing**: Configurable thresholds for different project needs
+
+**Team Metrics:**
+
+- 📊 **Aggregate Analytics**: Team-wide metrics across multiple PRs over time
+- ⏱️ **Time Tracking**: Pickup, approve, and merge time measurements
+- 🚀 **Velocity Insights**: Merge frequency per developer metrics
+- 📈 **Trend Analysis**: Weekly, fortnightly, or monthly reporting periods
+- 🎯 **Performance Ratings**: Elite/Good/Fair/Needs Focus classifications
+- 📝 **Rich Reports**: Markdown reports with statistics and visualizations
 
 **General:**
 
@@ -148,6 +164,31 @@ jobs:
 
 ### Advanced Configuration
 
+#### Team Metrics
+
+```yaml
+name: Collect Team Metrics
+
+on:
+  schedule:
+    - cron: '0 9 * * 1' # Every Monday at 9 AM UTC
+  workflow_dispatch:
+
+jobs:
+  team-metrics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Collect Team Metrics
+        uses: xavius-rb/agile-metrics-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          team-metrics: 'true'
+          time-period: 'weekly' # Options: weekly, fortnightly, monthly
+          team-metrics-output-path: 'reports/team_metrics.md'
+```
+
 #### Combined Metrics
 
 ```yaml
@@ -204,6 +245,16 @@ jobs:
 | `lead-time`            | Whether to enable lead time for change metric | ❌       | `false` |
 | `pr-size`              | Whether to enable PR size metric              | ❌       | `false` |
 | `pr-maturity`          | Whether to enable PR maturity metric          | ❌       | `false` |
+| `team-metrics`         | Whether to enable team metrics                | ❌       | `false` |
+
+### Team Metrics Configuration
+
+Applies to `team-metrics` metric.
+
+| Input                      | Description                                             | Required | Default                          |
+| -------------------------- | ------------------------------------------------------- | -------- | -------------------------------- |
+| `time-period`              | Time period for analysis (weekly, fortnightly, monthly) | ❌       | `weekly`                         |
+| `team-metrics-output-path` | Path where team metrics markdown report will be saved   | ❌       | `metrics/team_metrics_report.md` |
 
 ### DORA Metrics Configuration
 
@@ -254,6 +305,13 @@ Applies to `pr-size` and `pr-maturity` metrics.
 | `pr-maturity-ratio`      | PR maturity ratio (0.0 to 1.0)                    |
 | `pr-maturity-percentage` | PR maturity percentage (0 to 100)                 |
 | `pr-maturity-details`    | Detailed PR maturity metrics as JSON string       |
+
+### Team Metrics Outputs
+
+| Output                     | Description                                      |
+| -------------------------- | ------------------------------------------------ |
+| `team-metrics-json`        | Complete team metrics data as JSON string        |
+| `team-metrics-report-path` | Path to the generated team metrics markdown file |
 
 ## Metrics Explained
 
@@ -326,6 +384,50 @@ added after publication.
 - Identify developers who might need additional support
 - Measure the effectiveness of code review processes
 - Monitor the stability of feature development
+
+#### Team Metrics
+
+Team metrics provide aggregated insights across multiple PRs over a specified
+time period, helping teams understand their development velocity and quality
+patterns.
+
+**Metrics Collected:**
+
+- **Pickup Time**: Time from PR creation to first review activity
+- **Approve Time**: Time from first comment to first approval
+- **Merge Time**: Time from first approval to merge
+- **Merge Frequency**: Number of merged PRs per developer per week
+
+**Time Periods:**
+
+- **Weekly**: Last 7 days
+- **Fortnightly**: Last 14 days
+- **Monthly**: Last 30 days
+
+**Rating Levels:**
+
+All time-based metrics are rated on the same 4-level scale:
+
+| Level              | Pickup Time | Approve Time | Merge Time | Merge Frequency      |
+| ------------------ | ----------- | ------------ | ---------- | -------------------- |
+| ⭐ **Elite**       | < 2 hours   | < 17 hours   | < 2 hours  | > 1.6 PRs/dev/week   |
+| ✅ **Good**        | 2-6 hours   | 17-24 hours  | 2-5 hours  | 1.1-1.6 PRs/dev/week |
+| ⚖️ **Fair**        | 7-16 hours  | 25-45 hours  | 6-19 hours | 0.6-1.0 PRs/dev/week |
+| 🎯 **Needs Focus** | > 16 hours  | > 45 hours   | > 19 hours | < 0.6 PRs/dev/week   |
+
+**Outputs:**
+
+- JSON data with all metrics and per-PR details
+- Markdown report with statistics and ratings
+- GitHub Actions summary for immediate visibility
+
+**Benefits:**
+
+- Identifies bottlenecks in the review process
+- Tracks team velocity and throughput
+- Measures code review effectiveness
+- Highlights areas for process improvement
+- Provides data-driven insights for retrospectives
 
 ## How It Works
 

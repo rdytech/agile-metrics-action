@@ -77,6 +77,21 @@ inputs:
     required: false
     default: 'false'
 
+  team-metrics:
+    description: 'Whether to enable team metrics collection'
+    required: false
+    default: 'false'
+
+  time-period:
+    description: 'Time period for team metrics (weekly, fortnightly, monthly)'
+    required: false
+    default: 'weekly'
+
+  team-metrics-output-path:
+    description: 'Path where team metrics report will be saved'
+    required: false
+    default: 'metrics/team_metrics_report.md'
+
 # Define your outputs here.
 outputs:
   metrics-json:
@@ -117,6 +132,12 @@ outputs:
 
   pr-maturity-details:
     description: 'Detailed PR maturity metrics as JSON string'
+
+  team-metrics-json:
+    description: 'Complete team metrics data as JSON string'
+
+  team-metrics-report-path:
+    description: 'Path to the generated team metrics report file'
 
 runs:
   using: node24

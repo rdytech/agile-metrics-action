@@ -335,4 +335,110 @@ export class GitHubClient {
       return null
     }
   }
+
+  /**
+   * Get pull requests by date range
+   * @param {string} since - Start date (ISO 8601 format)
+   * @param {string} until - End date (ISO 8601 format)
+   * @returns {Promise<Array>} Array of pull requests
+   */
+  async getPullRequestsByDateRange(since, until) {
+    try {
+      const allPRs = []
+      let page = 1
+      const perPage = 100
+
+      // Fetch all PRs (we'll filter by date client-side)
+      while (true) {
+        const response = await this.octokit.request(
+          'GET /repos/{owner}/{repo}/pulls',
+          {
+            owner: this.owner,
+            repo: this.repo,
+            state: 'all',
+            sort: 'created',
+            direction: 'desc',
+            per_page: perPage,
+            page
+          }
+        )
+
+        if (response.data.length === 0) break
+
+        // Filter PRs by date range
+        const filteredPRs = response.data.filter((pr) => {
+          const createdAt = new Date(pr.created_at)
+          const sinceDate = new Date(since)
+          const untilDate = new Date(until)
+          return createdAt >= sinceDate && createdAt <= untilDate
+        })
+
+        allPRs.push(...filteredPRs)
+
+        // If we've gone past the date range, stop
+        const oldestPR = response.data[response.data.length - 1]
+        if (new Date(oldestPR.created_at) < new Date(since)) break
+
+        if (response.data.length < perPage) break
+        page++
+      }
+
+      return allPRs
+    } catch (error) {
+      core.warning(`Failed to fetch PRs by date range: ${error.message}`)
+      return []
+    }
+  }
+
+  /**
+   * Get pull request timeline events
+   * @param {number} pullNumber - Pull request number
+   * @returns {Promise<Array>} Array of timeline events
+   */
+  async getPullRequestTimeline(pullNumber) {
+    try {
+      const response = await this.octokit.request(
+        'GET /repos/{owner}/{repo}/issues/{issue_number}/timeline',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          issue_number: pullNumber,
+          per_page: 100
+        }
+      )
+
+      return response.data
+    } catch (error) {
+      core.warning(
+        `Failed to fetch timeline for PR #${pullNumber}: ${error.message}`
+      )
+      return []
+    }
+  }
+
+  /**
+   * Get pull request reviews
+   * @param {number} pullNumber - Pull request number
+   * @returns {Promise<Array>} Array of reviews
+   */
+  async getPullRequestReviews(pullNumber) {
+    try {
+      const response = await this.octokit.request(
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          pull_number: pullNumber,
+          per_page: 100
+        }
+      )
+
+      return response.data
+    } catch (error) {
+      core.warning(
+        `Failed to fetch reviews for PR #${pullNumber}: ${error.message}`
+      )
+      return []
+    }
+  }
 }

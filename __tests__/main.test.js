@@ -126,7 +126,8 @@ describe('main action', () => {
         'deployment-frequency': 'false',
         'lead-time': 'false',
         'pr-size': 'false',
-        'pr-maturity': 'false'
+        'pr-maturity': 'false',
+        'team-metrics': 'false'
       }
       return inputs[name] || ''
     })
@@ -134,7 +135,7 @@ describe('main action', () => {
     await run()
 
     expect(mockCore.setFailed).toHaveBeenCalledWith(
-      'At least one metric must be enabled (deployment-frequency, lead-time, pr-size, or pr-maturity)'
+      'At least one metric must be enabled (deployment-frequency, lead-time, pr-size, pr-maturity, or team-metrics)'
     )
   })
 

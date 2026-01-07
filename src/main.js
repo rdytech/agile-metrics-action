@@ -1,8 +1,11 @@
 import * as core from '@actions/core'
 import * as github from '@actions/github'
+import * as fs from 'fs'
+import * as path from 'path'
 import { GitHubClient } from './github-client.js'
 import { MetricsCollector } from './metrics-collector.js'
 import { DevExMetricsCollector } from './devex-metrics-collector.js'
+import { TeamMetricsCollector } from './team-metrics-collector.js'
 import { OutputManager } from './outputs.js'
 import {
   validatePositiveInteger,
@@ -67,17 +70,38 @@ export async function run() {
       core.getInput('ignore-file-deletions') || 'false',
       'ignore-file-deletions'
     )
+    const enableTeamMetrics = validateBoolean(
+      core.getInput('team-metrics') || 'false',
+      'team-metrics'
+    )
+    const timePeriod = core.getInput('time-period') || 'weekly'
+    const teamMetricsOutputPath = sanitizeFilePath(
+      core.getInput('team-metrics-output-path') ||
+        'metrics/team_metrics_report.md'
+    )
 
     // Validate that at least one metric is enabled
     if (
       !enableDeploymentFrequency &&
       !enableLeadTime &&
       !enablePrSize &&
-      !enablePrMaturity
+      !enablePrMaturity &&
+      !enableTeamMetrics
     ) {
       throw new Error(
-        'At least one metric must be enabled (deployment-frequency, lead-time, pr-size, or pr-maturity)'
+        'At least one metric must be enabled (deployment-frequency, lead-time, pr-size, pr-maturity, or team-metrics)'
       )
+    }
+
+    // Team metrics is independent - handle separately
+    if (enableTeamMetrics) {
+      await runTeamMetrics(
+        githubToken,
+        timePeriod,
+        teamMetricsOutputPath,
+        commitResults
+      )
+      return
     }
 
     // Determine if we need DORA or DevEx collectors based on enabled metrics
@@ -258,6 +282,87 @@ export async function run() {
       core.setFailed(error.message)
     } else {
       core.setFailed('An unknown error occurred')
+    }
+  }
+}
+
+/**
+ * Run team metrics collection workflow
+ * @param {string} githubToken - GitHub token
+ * @param {string} timePeriod - Time period for metrics
+ * @param {string} outputPath - Output path for report
+ * @param {boolean} commitResults - Whether to commit results
+ */
+async function runTeamMetrics(
+  githubToken,
+  timePeriod,
+  outputPath,
+  commitResults
+) {
+  try {
+    const { owner, repo } = github.context.repo
+
+    core.info(`Collecting team metrics for ${owner}/${repo}`)
+    core.info(`Time period: ${timePeriod}`)
+
+    const githubClient = new GitHubClient(githubToken, owner, repo)
+    const teamMetricsCollector = new TeamMetricsCollector(githubClient, {
+      timePeriod
+    })
+
+    // Collect team metrics
+    const metricsData = await teamMetricsCollector.collectMetrics()
+
+    // Generate markdown report
+    const markdownReport =
+      teamMetricsCollector.generateMarkdownReport(metricsData)
+
+    // Write report to file
+    const outputDir = path.dirname(outputPath)
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true })
+    }
+    fs.writeFileSync(outputPath, markdownReport, 'utf8')
+    core.info(`Team metrics report written to ${outputPath}`)
+
+    // Add to GitHub Actions summary
+    await core.summary.addRaw(markdownReport).write()
+    core.info('Team metrics added to workflow summary')
+
+    // Set outputs
+    core.setOutput('team-metrics-json', JSON.stringify(metricsData))
+    core.setOutput('team-metrics-report-path', outputPath)
+
+    // Commit results if enabled and not in PR context
+    if (commitResults && !github.context.payload.pull_request) {
+      try {
+        const { exec } = await import('@actions/exec')
+        await exec('git', ['config', 'user.name', 'github-actions[bot]'])
+        await exec('git', [
+          'config',
+          'user.email',
+          'github-actions[bot]@users.noreply.github.com'
+        ])
+        await exec('git', ['add', outputPath])
+        await exec('git', [
+          'commit',
+          '-m',
+          `Update team metrics report (${timePeriod})`
+        ])
+        await exec('git', ['push'])
+        core.info('Team metrics report committed and pushed')
+      } catch (error) {
+        core.warning(`Failed to commit team metrics report: ${error.message}`)
+      }
+    }
+
+    core.info('Team metrics collection completed successfully')
+  } catch (error) {
+    core.error(`Team metrics collection failed: ${error.message}`)
+    if (error instanceof Error) {
+      core.setFailed(error.message)
+    } else {
+      core.setFailed('An unknown error occurred during team metrics collection')
     }
   }
 }

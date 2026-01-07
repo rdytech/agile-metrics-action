@@ -2,12 +2,12 @@ import require$$0 from 'os';
 import require$$0$1 from 'crypto';
 import * as fs from 'fs';
 import fs__default from 'fs';
-import * as require$$1 from 'path';
-import require$$1__default from 'path';
+import * as path from 'path';
+import path__default from 'path';
 import require$$2$1 from 'http';
 import require$$3$1 from 'https';
 import require$$0$4 from 'net';
-import require$$1$1 from 'tls';
+import require$$1 from 'tls';
 import require$$4$1 from 'events';
 import require$$0$3 from 'assert';
 import require$$0$2 from 'util';
@@ -16,19 +16,34 @@ import require$$7 from 'buffer';
 import require$$8 from 'querystring';
 import require$$14 from 'stream/web';
 import require$$0$7 from 'node:stream';
-import require$$1$2 from 'node:util';
+import require$$1$1 from 'node:util';
 import require$$0$6 from 'node:events';
 import require$$0$8 from 'worker_threads';
 import require$$2$2 from 'perf_hooks';
 import require$$5 from 'util/types';
 import require$$4$2 from 'async_hooks';
-import require$$1$3 from 'console';
-import require$$1$4 from 'url';
+import require$$1$2 from 'console';
+import require$$1$3 from 'url';
 import require$$3$2 from 'zlib';
 import require$$6 from 'string_decoder';
 import require$$0$9 from 'diagnostics_channel';
 import require$$2$3 from 'child_process';
 import require$$6$1 from 'timers';
+
+function _mergeNamespaces(n, m) {
+	m.forEach(function (e) {
+		e && typeof e !== 'string' && !Array.isArray(e) && Object.keys(e).forEach(function (k) {
+			if (k !== 'default' && !(k in n)) {
+				var d = Object.getOwnPropertyDescriptor(e, k);
+				Object.defineProperty(n, k, d.get ? d : {
+					enumerable: true,
+					get: function () { return e[k]; }
+				});
+			}
+		});
+	});
+	return Object.freeze(n);
+}
 
 var commonjsGlobal = typeof globalThis !== 'undefined' ? globalThis : typeof window !== 'undefined' ? window : typeof global !== 'undefined' ? global : typeof self !== 'undefined' ? self : {};
 
@@ -407,7 +422,7 @@ var hasRequiredTunnel$1;
 function requireTunnel$1 () {
 	if (hasRequiredTunnel$1) return tunnel$1;
 	hasRequiredTunnel$1 = 1;
-	var tls = require$$1$1;
+	var tls = require$$1;
 	var http = require$$2$1;
 	var https = require$$3$1;
 	var events = require$$4$1;
@@ -1789,7 +1804,7 @@ function requireSbmh () {
 	 * by Hongli Lai at: https://github.com/FooBarWidget/boyer-moore-horspool
 	 */
 	const EventEmitter = require$$0$6.EventEmitter;
-	const inherits = require$$1$2.inherits;
+	const inherits = require$$1$1.inherits;
 
 	function SBMH (needle) {
 	  if (typeof needle === 'string') {
@@ -1998,7 +2013,7 @@ function requirePartStream () {
 	if (hasRequiredPartStream) return PartStream_1;
 	hasRequiredPartStream = 1;
 
-	const inherits = require$$1$2.inherits;
+	const inherits = require$$1$1.inherits;
 	const ReadableStream = require$$0$7.Readable;
 
 	function PartStream (opts) {
@@ -2044,7 +2059,7 @@ function requireHeaderParser () {
 	hasRequiredHeaderParser = 1;
 
 	const EventEmitter = require$$0$6.EventEmitter;
-	const inherits = require$$1$2.inherits;
+	const inherits = require$$1$1.inherits;
 	const getLimit = requireGetLimit();
 
 	const StreamSearch = requireSbmh();
@@ -2152,7 +2167,7 @@ function requireDicer () {
 	hasRequiredDicer = 1;
 
 	const WritableStream = require$$0$7.Writable;
-	const inherits = require$$1$2.inherits;
+	const inherits = require$$1$1.inherits;
 
 	const StreamSearch = requireSbmh();
 
@@ -2729,7 +2744,7 @@ function requireMultipart () {
 	//     -- this will require modifications to utils.parseParams
 
 	const { Readable } = require$$0$7;
-	const { inherits } = require$$1$2;
+	const { inherits } = require$$1$1;
 
 	const Dicer = requireDicer();
 
@@ -3295,7 +3310,7 @@ function requireMain () {
 	hasRequiredMain = 1;
 
 	const WritableStream = require$$0$7.Writable;
-	const { inherits } = require$$1$2;
+	const { inherits } = require$$1$1;
 	const Dicer = requireDicer();
 
 	const MultipartParser = requireMultipart();
@@ -8119,7 +8134,7 @@ function requireConnect () {
 	    let socket;
 	    if (protocol === 'https:') {
 	      if (!tls) {
-	        tls = require$$1$1;
+	        tls = require$$1;
 	      }
 	      servername = servername || options.servername || util.getServerName(host) || null;
 
@@ -14143,7 +14158,7 @@ function requirePendingInterceptorsFormatter () {
 	hasRequiredPendingInterceptorsFormatter = 1;
 
 	const { Transform } = require$$0$5;
-	const { Console } = require$$1$3;
+	const { Console } = require$$1$2;
 
 	/**
 	 * Gets the output of `console.table(…)` as a string.
@@ -14370,7 +14385,7 @@ function requireProxyAgent () {
 	hasRequiredProxyAgent = 1;
 
 	const { kProxy, kClose, kDestroy, kInterceptors } = requireSymbols$4();
-	const { URL } = require$$1$4;
+	const { URL } = require$$1$3;
 	const Agent = requireAgent();
 	const Pool = requirePool();
 	const DispatcherBase = requireDispatcherBase();
@@ -25541,7 +25556,7 @@ function requirePathUtils () {
 	};
 	Object.defineProperty(pathUtils, "__esModule", { value: true });
 	pathUtils.toPlatformPath = pathUtils.toWin32Path = pathUtils.toPosixPath = void 0;
-	const path = __importStar(require$$1__default);
+	const path = __importStar(path__default);
 	/**
 	 * toPosixPath converts the given path to the posix form. On Windows, \\ will be
 	 * replaced with /.
@@ -25582,7 +25597,7 @@ function requirePathUtils () {
 
 var platform = {};
 
-var exec = {};
+var exec$1 = {};
 
 var toolrunner = {};
 
@@ -25628,7 +25643,7 @@ function requireIoUtil () {
 		Object.defineProperty(exports, "__esModule", { value: true });
 		exports.getCmdPath = exports.tryGetExecutablePath = exports.isRooted = exports.isDirectory = exports.exists = exports.READONLY = exports.UV_FS_O_EXLOCK = exports.IS_WINDOWS = exports.unlink = exports.symlink = exports.stat = exports.rmdir = exports.rm = exports.rename = exports.readlink = exports.readdir = exports.open = exports.mkdir = exports.lstat = exports.copyFile = exports.chmod = void 0;
 		const fs = __importStar(fs__default);
-		const path = __importStar(require$$1__default);
+		const path = __importStar(path__default);
 		_a = fs.promises
 		// export const {open} = 'fs'
 		, exports.chmod = _a.chmod, exports.copyFile = _a.copyFile, exports.lstat = _a.lstat, exports.mkdir = _a.mkdir, exports.open = _a.open, exports.readdir = _a.readdir, exports.readlink = _a.readlink, exports.rename = _a.rename, exports.rm = _a.rm, exports.rmdir = _a.rmdir, exports.stat = _a.stat, exports.symlink = _a.symlink, exports.unlink = _a.unlink;
@@ -25818,7 +25833,7 @@ function requireIo () {
 	Object.defineProperty(io, "__esModule", { value: true });
 	io.findInPath = io.which = io.mkdirP = io.rmRF = io.mv = io.cp = void 0;
 	const assert_1 = require$$0$3;
-	const path = __importStar(require$$1__default);
+	const path = __importStar(path__default);
 	const ioUtil = __importStar(requireIoUtil());
 	/**
 	 * Copies a file or folder.
@@ -26126,7 +26141,7 @@ function requireToolrunner () {
 	const os = __importStar(require$$0);
 	const events = __importStar(require$$4$1);
 	const child = __importStar(require$$2$3);
-	const path = __importStar(require$$1__default);
+	const path = __importStar(path__default);
 	const io = __importStar(requireIo());
 	const ioUtil = __importStar(requireIoUtil());
 	const timers_1 = require$$6$1;
@@ -26716,28 +26731,28 @@ function requireToolrunner () {
 var hasRequiredExec;
 
 function requireExec () {
-	if (hasRequiredExec) return exec;
+	if (hasRequiredExec) return exec$1;
 	hasRequiredExec = 1;
-	var __createBinding = (exec && exec.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+	var __createBinding = (exec$1 && exec$1.__createBinding) || (Object.create ? (function(o, m, k, k2) {
 	    if (k2 === undefined) k2 = k;
 	    Object.defineProperty(o, k2, { enumerable: true, get: function() { return m[k]; } });
 	}) : (function(o, m, k, k2) {
 	    if (k2 === undefined) k2 = k;
 	    o[k2] = m[k];
 	}));
-	var __setModuleDefault = (exec && exec.__setModuleDefault) || (Object.create ? (function(o, v) {
+	var __setModuleDefault = (exec$1 && exec$1.__setModuleDefault) || (Object.create ? (function(o, v) {
 	    Object.defineProperty(o, "default", { enumerable: true, value: v });
 	}) : function(o, v) {
 	    o["default"] = v;
 	});
-	var __importStar = (exec && exec.__importStar) || function (mod) {
+	var __importStar = (exec$1 && exec$1.__importStar) || function (mod) {
 	    if (mod && mod.__esModule) return mod;
 	    var result = {};
 	    if (mod != null) for (var k in mod) if (k !== "default" && Object.hasOwnProperty.call(mod, k)) __createBinding(result, mod, k);
 	    __setModuleDefault(result, mod);
 	    return result;
 	};
-	var __awaiter = (exec && exec.__awaiter) || function (thisArg, _arguments, P, generator) {
+	var __awaiter = (exec$1 && exec$1.__awaiter) || function (thisArg, _arguments, P, generator) {
 	    function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
 	    return new (P || (P = Promise))(function (resolve, reject) {
 	        function fulfilled(value) { try { step(generator.next(value)); } catch (e) { reject(e); } }
@@ -26746,8 +26761,8 @@ function requireExec () {
 	        step((generator = generator.apply(thisArg, _arguments || [])).next());
 	    });
 	};
-	Object.defineProperty(exec, "__esModule", { value: true });
-	exec.getExecOutput = exec.exec = void 0;
+	Object.defineProperty(exec$1, "__esModule", { value: true });
+	exec$1.getExecOutput = exec$1.exec = void 0;
 	const string_decoder_1 = require$$6;
 	const tr = __importStar(requireToolrunner());
 	/**
@@ -26760,7 +26775,7 @@ function requireExec () {
 	 * @param     options            optional exec options.  See ExecOptions
 	 * @returns   Promise<number>    exit code
 	 */
-	function exec$1(commandLine, args, options) {
+	function exec(commandLine, args, options) {
 	    return __awaiter(this, void 0, void 0, function* () {
 	        const commandArgs = tr.argStringToArray(commandLine);
 	        if (commandArgs.length === 0) {
@@ -26773,7 +26788,7 @@ function requireExec () {
 	        return runner.exec();
 	    });
 	}
-	exec.exec = exec$1;
+	exec$1.exec = exec;
 	/**
 	 * Exec a command and get the output.
 	 * Output will be streamed to the live console.
@@ -26807,7 +26822,7 @@ function requireExec () {
 	            }
 	        };
 	        const listeners = Object.assign(Object.assign({}, options === null || options === void 0 ? void 0 : options.listeners), { stdout: stdOutListener, stderr: stdErrListener });
-	        const exitCode = yield exec$1(commandLine, args, Object.assign(Object.assign({}, options), { listeners }));
+	        const exitCode = yield exec(commandLine, args, Object.assign(Object.assign({}, options), { listeners }));
 	        //flush any remaining characters
 	        stdout += stdoutDecoder.end();
 	        stderr += stderrDecoder.end();
@@ -26818,9 +26833,9 @@ function requireExec () {
 	        };
 	    });
 	}
-	exec.getExecOutput = getExecOutput;
+	exec$1.getExecOutput = getExecOutput;
 	
-	return exec;
+	return exec$1;
 }
 
 var hasRequiredPlatform;
@@ -26970,7 +26985,7 @@ function requireCore () {
 		const file_command_1 = requireFileCommand();
 		const utils_1 = requireUtils$3();
 		const os = __importStar(require$$0);
-		const path = __importStar(require$$1__default);
+		const path = __importStar(path__default);
 		const oidc_utils_1 = requireOidcUtils();
 		/**
 		 * The code to exit an action
@@ -31577,6 +31592,112 @@ class GitHubClient {
       return null
     }
   }
+
+  /**
+   * Get pull requests by date range
+   * @param {string} since - Start date (ISO 8601 format)
+   * @param {string} until - End date (ISO 8601 format)
+   * @returns {Promise<Array>} Array of pull requests
+   */
+  async getPullRequestsByDateRange(since, until) {
+    try {
+      const allPRs = [];
+      let page = 1;
+      const perPage = 100;
+
+      // Fetch all PRs (we'll filter by date client-side)
+      while (true) {
+        const response = await this.octokit.request(
+          'GET /repos/{owner}/{repo}/pulls',
+          {
+            owner: this.owner,
+            repo: this.repo,
+            state: 'all',
+            sort: 'created',
+            direction: 'desc',
+            per_page: perPage,
+            page
+          }
+        );
+
+        if (response.data.length === 0) break
+
+        // Filter PRs by date range
+        const filteredPRs = response.data.filter((pr) => {
+          const createdAt = new Date(pr.created_at);
+          const sinceDate = new Date(since);
+          const untilDate = new Date(until);
+          return createdAt >= sinceDate && createdAt <= untilDate
+        });
+
+        allPRs.push(...filteredPRs);
+
+        // If we've gone past the date range, stop
+        const oldestPR = response.data[response.data.length - 1];
+        if (new Date(oldestPR.created_at) < new Date(since)) break
+
+        if (response.data.length < perPage) break
+        page++;
+      }
+
+      return allPRs
+    } catch (error) {
+      coreExports.warning(`Failed to fetch PRs by date range: ${error.message}`);
+      return []
+    }
+  }
+
+  /**
+   * Get pull request timeline events
+   * @param {number} pullNumber - Pull request number
+   * @returns {Promise<Array>} Array of timeline events
+   */
+  async getPullRequestTimeline(pullNumber) {
+    try {
+      const response = await this.octokit.request(
+        'GET /repos/{owner}/{repo}/issues/{issue_number}/timeline',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          issue_number: pullNumber,
+          per_page: 100
+        }
+      );
+
+      return response.data
+    } catch (error) {
+      coreExports.warning(
+        `Failed to fetch timeline for PR #${pullNumber}: ${error.message}`
+      );
+      return []
+    }
+  }
+
+  /**
+   * Get pull request reviews
+   * @param {number} pullNumber - Pull request number
+   * @returns {Promise<Array>} Array of reviews
+   */
+  async getPullRequestReviews(pullNumber) {
+    try {
+      const response = await this.octokit.request(
+        'GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          pull_number: pullNumber,
+          per_page: 100
+        }
+      );
+
+      return response.data
+    } catch (error) {
+      coreExports.warning(
+        `Failed to fetch reviews for PR #${pullNumber}: ${error.message}`
+      );
+      return []
+    }
+  }
 }
 
 /**
@@ -31636,7 +31757,7 @@ function ensureDirectoryExists(dirPath) {
  * @param {object} data - Data to write as JSON
  */
 function writeJsonFile(filePath, data) {
-  ensureDirectoryExists(require$$1.dirname(filePath));
+  ensureDirectoryExists(path.dirname(filePath));
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
@@ -31675,7 +31796,7 @@ function validateBoolean(value, fieldName) {
  */
 function sanitizeFilePath(filePath) {
   // Remove any potential directory traversal attempts
-  const normalized = require$$1.normalize(filePath);
+  const normalized = path.normalize(filePath);
   if (normalized.includes('..')) {
     throw new Error(`Invalid file path: ${filePath}`)
   }
@@ -32542,7 +32663,572 @@ This pull request has a **${maturityLevel}** maturity rating based on code stabi
   }
 }
 
+/**
+ * Team metrics collection class for analyzing PR metrics across a team
+ */
+class TeamMetricsCollector {
+  /**
+   * Create a new team metrics collector
+   * @param {Object} githubClient - GitHub API client
+   * @param {Object} options - Configuration options
+   */
+  constructor(githubClient, options = {}) {
+    this.githubClient = githubClient;
+    this.options = {
+      timePeriod: 'weekly', // weekly, fortnightly, monthly
+      ...options
+    };
+  }
+
+  /**
+   * Get date range based on time period
+   * @returns {Object} Object with start and end dates
+   */
+  getDateRange() {
+    const now = new Date();
+    const end = now.toISOString();
+    let start = new Date();
+
+    switch (this.options.timePeriod) {
+      case 'fortnightly':
+        start.setDate(now.getDate() - 14);
+        break
+      case 'monthly':
+        start.setDate(now.getDate() - 30);
+        break
+      case 'weekly':
+      default:
+        start.setDate(now.getDate() - 7);
+        break
+    }
+
+    return {
+      start: start.toISOString(),
+      end
+    }
+  }
+
+  /**
+   * Collect team metrics for the specified time period
+   * @returns {Promise<Object>} Team metrics data
+   */
+  async collectMetrics() {
+    try {
+      coreExports.info(
+        `Collecting team metrics for period: ${this.options.timePeriod}`
+      );
+
+      const dateRange = this.getDateRange();
+      coreExports.info(
+        `Date range: ${dateRange.start.split('T')[0]} to ${dateRange.end.split('T')[0]}`
+      );
+
+      // Fetch all PRs in the date range
+      const prs = await this.githubClient.getPullRequestsByDateRange(
+        dateRange.start,
+        dateRange.end
+      );
+
+      if (!prs || prs.length === 0) {
+        return {
+          error: 'No pull requests found in the specified time period',
+          period: this.options.timePeriod,
+          date_range: dateRange
+        }
+      }
+
+      coreExports.info(`Found ${prs.length} PRs in the time period`);
+
+      // Calculate metrics for each PR
+      const prMetrics = [];
+      for (const pr of prs) {
+        const metrics = await this.calculatePRMetrics(pr);
+        if (metrics) {
+          prMetrics.push(metrics);
+        }
+      }
+
+      // Calculate aggregate statistics
+      const stats = this.calculateAggregateStats(prMetrics);
+
+      return {
+        period: this.options.timePeriod,
+        date_range: dateRange,
+        total_prs: prs.length,
+        analyzed_prs: prMetrics.length,
+        unique_authors: this.countUniqueAuthors(prs),
+        metrics: stats,
+        timestamp: new Date().toISOString()
+      }
+    } catch (error) {
+      coreExports.error(`Team metrics collection failed: ${error.message}`);
+      return {
+        error: error.message,
+        period: this.options.timePeriod
+      }
+    }
+  }
+
+  /**
+   * Calculate metrics for a single PR
+   * @param {Object} pr - Pull request object
+   * @returns {Promise<Object>} PR metrics
+   */
+  async calculatePRMetrics(pr) {
+    try {
+      const prNumber = pr.number;
+      const createdAt = new Date(pr.created_at);
+
+      // Get PR timeline and reviews
+      const [timeline, reviews] = await Promise.all([
+        this.githubClient.getPullRequestTimeline(prNumber),
+        this.githubClient.getPullRequestReviews(prNumber)
+      ]);
+
+      // Calculate pickup time (creation to first review comment)
+      const pickupTime = this.calculatePickupTime(createdAt, timeline, reviews);
+
+      // Calculate approve time (first comment to first approval)
+      const approveTime = this.calculateApproveTime(
+        createdAt,
+        timeline,
+        reviews
+      );
+
+      // Calculate merge time (first approval to merge)
+      const mergeTime = pr.merged_at
+        ? this.calculateMergeTime(pr.merged_at, reviews)
+        : null;
+
+      // Get PR size from labels
+      const prSize = this.getPRSizeFromLabels(pr.labels);
+
+      return {
+        pr_number: prNumber,
+        author: pr.user.login,
+        state: pr.state,
+        merged: pr.merged_at !== null,
+        created_at: pr.created_at,
+        merged_at: pr.merged_at,
+        pickup_time_hours: pickupTime,
+        approve_time_hours: approveTime,
+        merge_time_hours: mergeTime,
+        pr_size: prSize
+      }
+    } catch (error) {
+      coreExports.warning(
+        `Failed to calculate metrics for PR #${pr.number}: ${error.message}`
+      );
+      return null
+    }
+  }
+
+  /**
+   * Calculate pickup time - time from PR creation to first review activity
+   * @param {Date} createdAt - PR creation time
+   * @param {Array} timeline - PR timeline events
+   * @param {Array} reviews - PR reviews
+   * @returns {number|null} Pickup time in hours
+   */
+  calculatePickupTime(createdAt, timeline, reviews) {
+    // Find first review comment or review
+    const firstReviewComment = timeline?.find(
+      (event) =>
+        event.event === 'reviewed' ||
+        event.event === 'commented' ||
+        (event.event === 'line-commented' && event.user?.type !== 'Bot')
+    );
+
+    const firstReview = reviews?.[0];
+
+    let firstActivityTime = null;
+
+    if (firstReviewComment && firstReview) {
+      const commentTime = new Date(firstReviewComment.created_at);
+      const reviewTime = new Date(firstReview.submitted_at);
+      firstActivityTime = commentTime < reviewTime ? commentTime : reviewTime;
+    } else if (firstReviewComment) {
+      firstActivityTime = new Date(firstReviewComment.created_at);
+    } else if (firstReview) {
+      firstActivityTime = new Date(firstReview.submitted_at);
+    }
+
+    if (!firstActivityTime) {
+      return null
+    }
+
+    const diffMs = firstActivityTime - createdAt;
+    return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100 // Round to 2 decimals
+  }
+
+  /**
+   * Calculate approve time - time from first comment to first approval
+   * @param {Date} createdAt - PR creation time
+   * @param {Array} timeline - PR timeline events
+   * @param {Array} reviews - PR reviews
+   * @returns {number|null} Approve time in hours
+   */
+  calculateApproveTime(createdAt, timeline, reviews) {
+    // Find first review comment
+    const firstComment = timeline?.find(
+      (event) =>
+        event.event === 'reviewed' ||
+        event.event === 'commented' ||
+        event.event === 'line-commented'
+    );
+
+    // Find first approval
+    const firstApproval = reviews?.find((review) => review.state === 'APPROVED');
+
+    if (!firstComment || !firstApproval) {
+      return null
+    }
+
+    const commentTime = new Date(firstComment.created_at);
+    const approvalTime = new Date(firstApproval.submitted_at);
+
+    const diffMs = approvalTime - commentTime;
+    return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100
+  }
+
+  /**
+   * Calculate merge time - time from first approval to merge
+   * @param {string} mergedAt - PR merge time
+   * @param {Array} reviews - PR reviews
+   * @returns {number|null} Merge time in hours
+   */
+  calculateMergeTime(mergedAt, reviews) {
+    const firstApproval = reviews?.find((review) => review.state === 'APPROVED');
+
+    if (!firstApproval) {
+      return null
+    }
+
+    const approvalTime = new Date(firstApproval.submitted_at);
+    const mergeTime = new Date(mergedAt);
+
+    const diffMs = mergeTime - approvalTime;
+    return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100
+  }
+
+  /**
+   * Get PR size from labels
+   * @param {Array} labels - PR labels
+   * @returns {string|null} PR size (s, m, l, xl)
+   */
+  getPRSizeFromLabels(labels) {
+    if (!labels || labels.length === 0) {
+      return null
+    }
+
+    const sizeLabel = labels.find((label) =>
+      label.name.toLowerCase().startsWith('size/')
+    );
+
+    if (!sizeLabel) {
+      return null
+    }
+
+    // Extract size from label (e.g., "size/m" -> "m")
+    return sizeLabel.name.toLowerCase().replace('size/', '')
+  }
+
+  /**
+   * Count unique authors in the PR list
+   * @param {Array} prs - Array of pull requests
+   * @returns {number} Number of unique authors
+   */
+  countUniqueAuthors(prs) {
+    const authors = new Set(prs.map((pr) => pr.user.login));
+    return authors.size
+  }
+
+  /**
+   * Calculate aggregate statistics from PR metrics
+   * @param {Array} prMetrics - Array of PR metrics
+   * @returns {Object} Aggregate statistics
+   */
+  calculateAggregateStats(prMetrics) {
+    // Filter out null values for each metric
+    const pickupTimes = prMetrics
+      .map((m) => m.pickup_time_hours)
+      .filter((t) => t !== null);
+    const approveTimes = prMetrics
+      .map((m) => m.approve_time_hours)
+      .filter((t) => t !== null);
+    const mergeTimes = prMetrics
+      .map((m) => m.merge_time_hours)
+      .filter((t) => t !== null);
+
+    // Calculate averages
+    const avgPickupTime =
+      pickupTimes.length > 0
+        ? pickupTimes.reduce((a, b) => a + b, 0) / pickupTimes.length
+        : null;
+    const avgApproveTime =
+      approveTimes.length > 0
+        ? approveTimes.reduce((a, b) => a + b, 0) / approveTimes.length
+        : null;
+    const avgMergeTime =
+      mergeTimes.length > 0
+        ? mergeTimes.reduce((a, b) => a + b, 0) / mergeTimes.length
+        : null;
+
+    // Count merged PRs
+    const mergedCount = prMetrics.filter((m) => m.merged).length;
+    const totalPRs = prMetrics.length;
+
+    // Calculate merge frequency per developer per week
+    const uniqueAuthors = new Set(prMetrics.map((m) => m.author)).size;
+    const daysInPeriod = this.getDaysInPeriod();
+    const weeksInPeriod = daysInPeriod / 7;
+    const mergeFrequency =
+      uniqueAuthors > 0 && weeksInPeriod > 0
+        ? mergedCount / (uniqueAuthors * weeksInPeriod)
+        : 0;
+
+    // Calculate PR size distribution
+    const sizeDistribution = this.calculateSizeDistribution(prMetrics);
+
+    return {
+      pickup_time: {
+        average_hours: avgPickupTime
+          ? Math.round(avgPickupTime * 100) / 100
+          : null,
+        rating: avgPickupTime ? this.ratePickupTime(avgPickupTime) : null,
+        sample_size: pickupTimes.length
+      },
+      approve_time: {
+        average_hours: avgApproveTime
+          ? Math.round(avgApproveTime * 100) / 100
+          : null,
+        rating: avgApproveTime ? this.rateApproveTime(avgApproveTime) : null,
+        sample_size: approveTimes.length
+      },
+      merge_time: {
+        average_hours: avgMergeTime
+          ? Math.round(avgMergeTime * 100) / 100
+          : null,
+        rating: avgMergeTime ? this.rateMergeTime(avgMergeTime) : null,
+        sample_size: mergeTimes.length
+      },
+      merge_frequency: {
+        value: Math.round(mergeFrequency * 100) / 100,
+        rating: this.rateMergeFrequency(mergeFrequency),
+        merged_prs: mergedCount,
+        total_prs: totalPRs,
+        unique_authors: uniqueAuthors
+      },
+      size_distribution: sizeDistribution
+    }
+  }
+
+  /**
+   * Calculate PR size distribution
+   * @param {Array} prMetrics - Array of PR metrics
+   * @returns {Object} Size distribution percentages
+   */
+  calculateSizeDistribution(prMetrics) {
+    const sizes = { s: 0, m: 0, l: 0, xl: 0, unknown: 0 };
+    const total = prMetrics.length;
+
+    prMetrics.forEach((pr) => {
+      const size = pr.pr_size;
+      if (size && sizes.hasOwnProperty(size)) {
+        sizes[size]++;
+      } else {
+        sizes.unknown++;
+      }
+    });
+
+    return {
+      small_percent: total > 0 ? Math.round((sizes.s / total) * 100) : 0,
+      medium_percent: total > 0 ? Math.round((sizes.m / total) * 100) : 0,
+      large_percent: total > 0 ? Math.round((sizes.l / total) * 100) : 0,
+      xl_percent: total > 0 ? Math.round((sizes.xl / total) * 100) : 0,
+      unknown_percent: total > 0 ? Math.round((sizes.unknown / total) * 100) : 0
+    }
+  }
+
+  /**
+   * Get number of days in the current period
+   * @returns {number} Number of days
+   */
+  getDaysInPeriod() {
+    switch (this.options.timePeriod) {
+      case 'fortnightly':
+        return 14
+      case 'monthly':
+        return 30
+      case 'weekly':
+      default:
+        return 7
+    }
+  }
+
+  /**
+   * Rate pickup time
+   * @param {number} hours - Pickup time in hours
+   * @returns {string} Rating
+   */
+  ratePickupTime(hours) {
+    if (hours < 2) return 'Elite'
+    if (hours <= 6) return 'Good'
+    if (hours <= 16) return 'Fair'
+    return 'Needs Focus'
+  }
+
+  /**
+   * Rate approve time
+   * @param {number} hours - Approve time in hours
+   * @returns {string} Rating
+   */
+  rateApproveTime(hours) {
+    if (hours < 17) return 'Elite'
+    if (hours <= 24) return 'Good'
+    if (hours <= 45) return 'Fair'
+    return 'Needs Focus'
+  }
+
+  /**
+   * Rate merge time
+   * @param {number} hours - Merge time in hours
+   * @returns {string} Rating
+   */
+  rateMergeTime(hours) {
+    if (hours < 2) return 'Elite'
+    if (hours <= 5) return 'Good'
+    if (hours <= 19) return 'Fair'
+    return 'Needs Focus'
+  }
+
+  /**
+   * Rate merge frequency
+   * @param {number} frequency - Merge frequency (PRs per dev per week)
+   * @returns {string} Rating
+   */
+  rateMergeFrequency(frequency) {
+    if (frequency > 1.6) return 'Elite'
+    if (frequency >= 1.1) return 'Good'
+    if (frequency >= 0.6) return 'Fair'
+    return 'Needs Focus'
+  }
+
+  /**
+   * Get emoji for rating
+   * @param {string} rating - Rating
+   * @returns {string} Emoji
+   */
+  getRatingEmoji(rating) {
+    const emojiMap = {
+      Elite: '⭐',
+      Good: '✅',
+      Fair: '⚖️',
+      'Needs Focus': '🎯'
+    };
+    return emojiMap[rating] || '❓'
+  }
+
+  /**
+   * Generate markdown report
+   * @param {Object} metricsData - Team metrics data
+   * @returns {string} Markdown report
+   */
+  generateMarkdownReport(metricsData) {
+    if (metricsData.error) {
+      return `# Team Metrics Report
+
+**Period:** ${metricsData.period}
+
+⚠️ **Error:** ${metricsData.error}
+`
+    }
+
+    const { metrics, period, date_range, total_prs, unique_authors } =
+      metricsData;
+
+    let report = `# Team Metrics Report
+
+**Period:** ${period}
+**Date Range:** ${date_range.start.split('T')[0]} to ${date_range.end.split('T')[0]}
+**Total PRs:** ${total_prs}
+**Unique Authors:** ${unique_authors}
+
+---
+
+## 📊 Time Metrics
+
+`;
+
+    // Pickup Time
+    if (metrics.pickup_time.average_hours !== null) {
+      const emoji = this.getRatingEmoji(metrics.pickup_time.rating);
+      report += `### ${emoji} Pickup Time: ${metrics.pickup_time.average_hours}h (${metrics.pickup_time.rating})
+
+Time from PR creation to first review activity.
+- **Sample Size:** ${metrics.pickup_time.sample_size} PRs
+
+`;
+    }
+
+    // Approve Time
+    if (metrics.approve_time.average_hours !== null) {
+      const emoji = this.getRatingEmoji(metrics.approve_time.rating);
+      report += `### ${emoji} Approve Time: ${metrics.approve_time.average_hours}h (${metrics.approve_time.rating})
+
+Time from first comment to first approval.
+- **Sample Size:** ${metrics.approve_time.sample_size} PRs
+
+`;
+    }
+
+    // Merge Time
+    if (metrics.merge_time.average_hours !== null) {
+      const emoji = this.getRatingEmoji(metrics.merge_time.rating);
+      report += `### ${emoji} Merge Time: ${metrics.merge_time.average_hours}h (${metrics.merge_time.rating})
+
+Time from first approval to merge.
+- **Sample Size:** ${metrics.merge_time.sample_size} PRs
+
+`;
+    }
+
+    // Merge Frequency
+    const freqEmoji = this.getRatingEmoji(metrics.merge_frequency.rating);
+    report += `---
+
+## ${freqEmoji} Merge Frequency: ${metrics.merge_frequency.value} PRs/dev/week (${metrics.merge_frequency.rating})
+
+- **Merged PRs:** ${metrics.merge_frequency.merged_prs}
+- **Total PRs:** ${metrics.merge_frequency.total_prs}
+- **Unique Authors:** ${metrics.merge_frequency.unique_authors}
+
+---
+
+## 📏 PR Size Distribution
+
+`;
+
+    const dist = metrics.size_distribution;
+    report += `- **Small:** ${dist.small_percent}%
+- **Medium:** ${dist.medium_percent}%
+- **Large:** ${dist.large_percent}%
+- **XL:** ${dist.xl_percent}%
+${dist.unknown_percent > 0 ? `- **Unknown:** ${dist.unknown_percent}%\n` : ''}
+---
+
+*Report generated on ${new Date(metricsData.timestamp).toLocaleString()}*
+`;
+
+    return report
+  }
+}
+
 var execExports = requireExec();
+
+var exec = /*#__PURE__*/_mergeNamespaces({
+	__proto__: null
+}, [execExports]);
 
 /**
  * Handle all output operations for the action
@@ -32837,17 +33523,38 @@ async function run() {
       coreExports.getInput('ignore-file-deletions') || 'false',
       'ignore-file-deletions'
     );
+    const enableTeamMetrics = validateBoolean(
+      coreExports.getInput('team-metrics') || 'false',
+      'team-metrics'
+    );
+    const timePeriod = coreExports.getInput('time-period') || 'weekly';
+    const teamMetricsOutputPath = sanitizeFilePath(
+      coreExports.getInput('team-metrics-output-path') ||
+        'metrics/team_metrics_report.md'
+    );
 
     // Validate that at least one metric is enabled
     if (
       !enableDeploymentFrequency &&
       !enableLeadTime &&
       !enablePrSize &&
-      !enablePrMaturity
+      !enablePrMaturity &&
+      !enableTeamMetrics
     ) {
       throw new Error(
-        'At least one metric must be enabled (deployment-frequency, lead-time, pr-size, or pr-maturity)'
+        'At least one metric must be enabled (deployment-frequency, lead-time, pr-size, pr-maturity, or team-metrics)'
       )
+    }
+
+    // Team metrics is independent - handle separately
+    if (enableTeamMetrics) {
+      await runTeamMetrics(
+        githubToken,
+        timePeriod,
+        teamMetricsOutputPath,
+        commitResults
+      );
+      return
     }
 
     // Determine if we need DORA or DevEx collectors based on enabled metrics
@@ -33028,6 +33735,87 @@ async function run() {
       coreExports.setFailed(error.message);
     } else {
       coreExports.setFailed('An unknown error occurred');
+    }
+  }
+}
+
+/**
+ * Run team metrics collection workflow
+ * @param {string} githubToken - GitHub token
+ * @param {string} timePeriod - Time period for metrics
+ * @param {string} outputPath - Output path for report
+ * @param {boolean} commitResults - Whether to commit results
+ */
+async function runTeamMetrics(
+  githubToken,
+  timePeriod,
+  outputPath,
+  commitResults
+) {
+  try {
+    const { owner, repo } = githubExports.context.repo;
+
+    coreExports.info(`Collecting team metrics for ${owner}/${repo}`);
+    coreExports.info(`Time period: ${timePeriod}`);
+
+    const githubClient = new GitHubClient(githubToken, owner, repo);
+    const teamMetricsCollector = new TeamMetricsCollector(githubClient, {
+      timePeriod
+    });
+
+    // Collect team metrics
+    const metricsData = await teamMetricsCollector.collectMetrics();
+
+    // Generate markdown report
+    const markdownReport =
+      teamMetricsCollector.generateMarkdownReport(metricsData);
+
+    // Write report to file
+    const outputDir = path.dirname(outputPath);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+    fs.writeFileSync(outputPath, markdownReport, 'utf8');
+    coreExports.info(`Team metrics report written to ${outputPath}`);
+
+    // Add to GitHub Actions summary
+    await coreExports.summary.addRaw(markdownReport).write();
+    coreExports.info('Team metrics added to workflow summary');
+
+    // Set outputs
+    coreExports.setOutput('team-metrics-json', JSON.stringify(metricsData));
+    coreExports.setOutput('team-metrics-report-path', outputPath);
+
+    // Commit results if enabled and not in PR context
+    if (commitResults && !githubExports.context.payload.pull_request) {
+      try {
+        const { exec: exec$1 } = await Promise.resolve().then(function () { return exec; });
+        await exec$1('git', ['config', 'user.name', 'github-actions[bot]']);
+        await exec$1('git', [
+          'config',
+          'user.email',
+          'github-actions[bot]@users.noreply.github.com'
+        ]);
+        await exec$1('git', ['add', outputPath]);
+        await exec$1('git', [
+          'commit',
+          '-m',
+          `Update team metrics report (${timePeriod})`
+        ]);
+        await exec$1('git', ['push']);
+        coreExports.info('Team metrics report committed and pushed');
+      } catch (error) {
+        coreExports.warning(`Failed to commit team metrics report: ${error.message}`);
+      }
+    }
+
+    coreExports.info('Team metrics collection completed successfully');
+  } catch (error) {
+    coreExports.error(`Team metrics collection failed: ${error.message}`);
+    if (error instanceof Error) {
+      coreExports.setFailed(error.message);
+    } else {
+      coreExports.setFailed('An unknown error occurred during team metrics collection');
     }
   }
 }
