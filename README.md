@@ -87,7 +87,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Collect Deployment Frequency
-        uses: xavius-rb/agile-metrics-action@v2
+        uses: xavius-rb/agile-metrics-action@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           deployment-frequency: 'true'
@@ -110,7 +110,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Collect Lead Time
-        uses: xavius-rb/agile-metrics-action@v2
+        uses: xavius-rb/agile-metrics-action@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           lead-time: 'true'
@@ -132,7 +132,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Analyze PR Size
-        uses: xavius-rb/agile-metrics-action@v2
+        uses: xavius-rb/agile-metrics-action@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           pr-size: 'true'
@@ -156,7 +156,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Analyze PR Maturity
-        uses: xavius-rb/agile-metrics-action@v2
+        uses: xavius-rb/agile-metrics-action@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           pr-maturity: 'true'
@@ -181,50 +181,12 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Collect Team Metrics
-        uses: xavius-rb/agile-metrics-action@v2
+        uses: xavius-rb/agile-metrics-action@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           team-metrics: 'true'
           time-period: 'weekly' # Options: weekly, fortnightly, monthly
           team-metrics-output-path: 'reports/team_metrics.md'
-```
-
-#### Combined Metrics
-
-```yaml
-- name: Collect All Metrics
-  id: metrics
-  uses: xavius-rb/agile-metrics-action@v2
-  with:
-    github-token: ${{ secrets.GITHUB_TOKEN }}
-
-    # Output configuration
-    output-path: 'reports/metrics.json'
-    commit-results: 'false'
-
-    # Enable specific metrics
-    deployment-frequency: 'true'
-    lead-time: 'true'
-    pr-size: 'true'
-    pr-maturity: 'true'
-
-    # DORA configuration (applies to deployment-frequency and lead-time)
-    include-merge-commits: 'true'
-    max-releases: '50'
-    max-tags: '100'
-
-    # DevEx configuration (applies to pr-size and pr-maturity)
-    files-to-ignore: '*.md,*.txt,package-lock.json,yarn.lock'
-    ignore-line-deletions: 'false'
-    ignore-file-deletions: 'true'
-
-- name: Use Metrics
-  run: |
-    echo "Deployment frequency: \
-      ${{ steps.metrics.outputs.deployment-frequency }} days"
-    echo "Average lead time: ${{ steps.metrics.outputs.lead-time-avg }} hours"
-    echo "PR size: ${{ steps.metrics.outputs.pr-size }}"
-    echo "PR maturity: ${{ steps.metrics.outputs.pr-maturity-percentage }}%"
 ```
 
 ## Inputs
@@ -436,7 +398,7 @@ All time-based metrics are rated on the same 4-level scale:
 1. **Release Analysis**: Compares the latest and previous releases/tags to
    calculate deployment frequency
 1. **Commit Analysis**: Examines all commits between releases to calculate lead
-   time metrics
+   time for changes
 1. **Output Generation**: Creates JSON file, sets GitHub Actions outputs, and
    generates markdown summary
 1. **Optional Commit**: Can commit the metrics file back to the repository for
@@ -492,21 +454,6 @@ for details.
 
 ## Migration Guide
 
-### Upgrading from v1 to v2
-
-Version 2.0.0 introduces a **breaking change** in how metrics are enabled. The
-high-level `enable-dora-metrics` and `enable-devex-metrics` inputs have been
-replaced with individual metric toggles.
-
-#### v1.x Configuration
-
-```yaml
-- uses: xavius-rb/agile-metrics-action@v1
-  with:
-    enable-dora-metrics: 'true'
-    enable-devex-metrics: 'true'
-```
-
 #### v2.x Configuration
 
 ```yaml
@@ -518,17 +465,14 @@ replaced with individual metric toggles.
     pr-maturity: 'true'
 ```
 
-**Key Changes:**
+#### v3.x Configuration
 
-1. `enable-dora-metrics: 'true'` → `deployment-frequency: 'true'` +
-   `lead-time: 'true'`
-1. `enable-devex-metrics: 'true'` → `pr-size: 'true'` + `pr-maturity: 'true'`
-1. By default, **all metrics are now disabled** (changed from v1 where DORA
-   metrics were enabled by default)
-1. You must explicitly enable each metric you want to collect
+Added `team-metrics`, `time-period` and `team-metrics-output-path`.
 
-**Benefits:**
-
-1. Fine-grained control over which metrics to collect
-1. Reduced API calls and processing time when you only need specific metrics
-1. More flexible for different use cases and workflows
+```yaml
+- uses: xavius-rb/agile-metrics-action@v3
+  with:
+    team-metrics: 'true'
+    time-period: ${{ inputs.time-period || 'monthly' }}
+    team-metrics-output-path: reports/team_metrics.md
+```

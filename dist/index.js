@@ -32839,7 +32839,15 @@ class TeamMetricsCollector {
         (event.event === 'line-commented' && event.user?.type !== 'Bot')
     );
 
-    const firstReview = reviews?.[0];
+    // Find first review (sorted by submission time to ensure chronological order)
+    const sortedReviews = reviews
+      ?.filter((r) => r.submitted_at) // Ensure reviews have submission time
+      .sort(
+        (a, b) =>
+          new Date(a.submitted_at).getTime() -
+          new Date(b.submitted_at).getTime()
+      );
+    const firstReview = sortedReviews?.[0];
 
     let firstActivityTime = null;
 
@@ -32869,25 +32877,29 @@ class TeamMetricsCollector {
    * @returns {number|null} Approve time in hours
    */
   calculateApproveTime(createdAt, timeline, reviews) {
-    // Find first review comment
-    const firstComment = timeline?.find(
-      (event) =>
-        event.event === 'reviewed' ||
-        event.event === 'commented' ||
-        event.event === 'line-commented'
-    );
-
     // Find first approval
     const firstApproval = reviews?.find((review) => review.state === 'APPROVED');
 
-    if (!firstComment || !firstApproval) {
+    if (!firstApproval) {
       return null
     }
 
-    const commentTime = new Date(firstComment.created_at);
+    // Find first review activity (excluding the approval itself)
+    const firstComment = timeline?.find(
+      (event) =>
+        (event.event === 'reviewed' ||
+          event.event === 'commented' ||
+          event.event === 'line-commented') &&
+        new Date(event.created_at) < new Date(firstApproval.submitted_at)
+    );
+
+    // Calculate time from first comment to approval, or from PR creation if no prior comments
+    const startTime = firstComment
+      ? new Date(firstComment.created_at)
+      : createdAt;
     const approvalTime = new Date(firstApproval.submitted_at);
 
-    const diffMs = approvalTime - commentTime;
+    const diffMs = approvalTime - startTime;
     return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100
   }
 
@@ -33034,7 +33046,7 @@ class TeamMetricsCollector {
 
     prMetrics.forEach((pr) => {
       const size = pr.pr_size;
-      if (size && sizes.hasOwnProperty(size)) {
+      if (size && Object.prototype.hasOwnProperty.call(sizes, size)) {
         sizes[size]++;
       } else {
         sizes.unknown++;
@@ -33156,7 +33168,7 @@ class TeamMetricsCollector {
 
 ---
 
-## 📊 Time Metrics
+## 📊 Review Time Metrics
 
 `;
 
@@ -33176,7 +33188,7 @@ Time from PR creation to first review activity.
       const emoji = this.getRatingEmoji(metrics.approve_time.rating);
       report += `### ${emoji} Approve Time: ${metrics.approve_time.average_hours}h (${metrics.approve_time.rating})
 
-Time from first comment to first approval.
+Time from first review activity (or PR creation) to first approval.
 - **Sample Size:** ${metrics.approve_time.sample_size} PRs
 
 `;

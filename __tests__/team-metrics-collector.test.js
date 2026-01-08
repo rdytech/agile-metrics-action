@@ -88,7 +88,14 @@ class TestTeamMetricsCollector {
         (event.event === 'line-commented' && event.user?.type !== 'Bot')
     )
 
-    const firstReview = reviews?.[0]
+    const sortedReviews = reviews
+      ?.filter((r) => r.submitted_at)
+      .sort(
+        (a, b) =>
+          new Date(a.submitted_at).getTime() -
+          new Date(b.submitted_at).getTime()
+      )
+    const firstReview = sortedReviews?.[0]
 
     let firstActivityTime = null
 
@@ -109,20 +116,29 @@ class TestTeamMetricsCollector {
   }
 
   calculateApproveTime(createdAt, timeline, reviews) {
-    const firstComment = timeline?.find(
-      (event) =>
-        event.event === 'reviewed' ||
-        event.event === 'commented' ||
-        event.event === 'line-commented'
-    )
-
+    // Find first approval
     const firstApproval = reviews?.find((review) => review.state === 'APPROVED')
 
-    if (!firstComment || !firstApproval) return null
+    if (!firstApproval) {
+      return null
+    }
 
-    const commentTime = new Date(firstComment.created_at)
+    // Find first review activity (excluding the approval itself)
+    const firstComment = timeline?.find(
+      (event) =>
+        (event.event === 'reviewed' ||
+          event.event === 'commented' ||
+          event.event === 'line-commented') &&
+        new Date(event.created_at) < new Date(firstApproval.submitted_at)
+    )
+
+    // Calculate time from first comment to approval, or from PR creation if no prior comments
+    const startTime = firstComment
+      ? new Date(firstComment.created_at)
+      : createdAt
     const approvalTime = new Date(firstApproval.submitted_at)
-    const diffMs = approvalTime - commentTime
+
+    const diffMs = approvalTime - startTime
     return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100
   }
 
@@ -318,6 +334,21 @@ describe('TeamMetricsCollector', () => {
       expect(pickupTime).toBe(3.5)
     })
 
+    it('should calculate pickup time from approval when it is the first review', () => {
+      const createdAt = new Date('2024-01-01T10:00:00Z')
+      const timeline = []
+      const reviews = [
+        { state: 'APPROVED', submitted_at: '2024-01-01T14:00:00Z' }
+      ]
+
+      const pickupTime = collector.calculatePickupTime(
+        createdAt,
+        timeline,
+        reviews
+      )
+      expect(pickupTime).toBe(4)
+    })
+
     it('should return null when no activity', () => {
       const createdAt = new Date('2024-01-01T10:00:00Z')
       const timeline = []
@@ -363,6 +394,21 @@ describe('TeamMetricsCollector', () => {
         reviews
       )
       expect(approveTime).toBe(null)
+    })
+
+    it('should calculate from PR creation when no prior comments', () => {
+      const createdAt = new Date('2024-01-01T10:00:00Z')
+      const timeline = [] // No comments
+      const reviews = [
+        { state: 'APPROVED', submitted_at: '2024-01-01T14:00:00Z' }
+      ]
+
+      const approveTime = collector.calculateApproveTime(
+        createdAt,
+        timeline,
+        reviews
+      )
+      expect(approveTime).toBe(4) // 4 hours from creation to approval
     })
   })
 
