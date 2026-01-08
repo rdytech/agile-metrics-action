@@ -143,7 +143,7 @@ class TestTeamMetricsCollector {
 
     prMetrics.forEach((pr) => {
       const size = pr.pr_size
-      if (size && sizes.hasOwnProperty(size)) {
+      if (size && Object.prototype.hasOwnProperty.call(sizes, size)) {
         sizes[size]++
       } else {
         sizes.unknown++
