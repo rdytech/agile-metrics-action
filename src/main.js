@@ -116,7 +116,7 @@ export async function run() {
       `Configuration: outputPath=${outputPath}, commitResults=${commitResults}, includeMergeCommits=${includeMergeCommits}`
     )
     core.debug(
-      `Metrics enabled: Deployment Frequency=${enableDeploymentFrequency}, Lead Time=${enableLeadTime}, PR Size=${enablePrSize}, PR Maturity=${enablePrMaturity}`
+      `Metrics enabled: Deploy Frequency=${enableDeploymentFrequency}, Cycle Time=${enableLeadTime}, PR Size=${enablePrSize}, PR Maturity=${enablePrMaturity}`
     )
 
     // Initialize components
@@ -136,10 +136,10 @@ export async function run() {
     if (needDoraMetrics) {
       const enabledDoraMetrics = []
       if (enableDeploymentFrequency) {
-        enabledDoraMetrics.push('deployment frequency')
+        enabledDoraMetrics.push('deploy frequency')
       }
       if (enableLeadTime) {
-        enabledDoraMetrics.push('lead time')
+        enabledDoraMetrics.push('cycle time')
       }
 
       core.info(`Collecting DORA metrics: ${enabledDoraMetrics.join(', ')}...`)
@@ -252,13 +252,13 @@ export async function run() {
 
         if (enableDeploymentFrequency) {
           core.info(
-            `Deployment frequency: ${combinedMetricsData.metrics?.dora?.deployment_frequency_days ?? 'N/A'} days`
+            `Deploy frequency: ${combinedMetricsData.metrics?.dora?.deploy_frequency_days ?? 'N/A'} days`
           )
         }
 
         if (enableLeadTime) {
           core.info(
-            `Lead time (avg): ${combinedMetricsData.metrics?.dora?.lead_time_for_change?.avg_hours ?? 'N/A'} hours`
+            `Cycle time (avg): ${combinedMetricsData.metrics?.dora?.cycle_time?.avg_hours ?? 'N/A'} hours`
           )
         }
       }
@@ -306,12 +306,30 @@ async function runTeamMetrics(
     core.info(`Time period: ${timePeriod}`)
 
     const githubClient = new GitHubClient(githubToken, owner, repo)
+
+    // Collect DORA metrics (deploy frequency and cycle time)
+    const metricsCollector = new MetricsCollector(githubClient, {
+      includeMergeCommits: false,
+      maxReleases: 100,
+      maxTags: 100,
+      enabledMetrics: {
+        deploymentFrequency: true,
+        leadTime: true
+      }
+    })
+    const doraMetrics = await metricsCollector.collectMetrics()
+
     const teamMetricsCollector = new TeamMetricsCollector(githubClient, {
       timePeriod
     })
 
     // Collect team metrics
     const metricsData = await teamMetricsCollector.collectMetrics()
+
+    // Add DORA metrics to team metrics
+    if (doraMetrics && doraMetrics.metrics) {
+      metricsData.dora_metrics = doraMetrics.metrics
+    }
 
     // Generate markdown report
     const markdownReport =

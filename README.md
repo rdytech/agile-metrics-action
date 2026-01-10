@@ -11,8 +11,8 @@ including:
 
 **DORA Metrics:**
 
-- **Deployment Frequency**: How often deployments are made to production
-- **Lead Time for Change**: Time from commit to deployment
+- **Deploy Frequency**: How often deployments are made to production
+- **Cycle Time**: Time from commit to deployment
 
 **DevEx Metrics:**
 
@@ -70,10 +70,10 @@ including:
 
 ### Basic Usage
 
-#### Deployment Frequency Metric
+#### Deploy Frequency Metric
 
 ```yaml
-name: Collect Deployment Frequency
+name: Collect Deploy Frequency
 
 on:
   schedule:
@@ -86,17 +86,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Collect Deployment Frequency
+      - name: Collect Deploy Frequency
         uses: xavius-rb/agile-metrics-action@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           deployment-frequency: 'true'
 ```
 
-#### Lead Time Metric
+#### Cycle Time Metric
 
 ```yaml
-name: Collect Lead Time
+name: Collect Cycle Time
 
 on:
   schedule:
@@ -109,7 +109,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Collect Lead Time
+      - name: Collect Cycle Time
         uses: xavius-rb/agile-metrics-action@v3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -193,50 +193,50 @@ jobs:
 
 ### General Inputs
 
-| Input            | Description                                               | Required | Default                         |
-| ---------------- | --------------------------------------------------------- | -------- | ------------------------------- |
-| `github-token`   | GitHub token for API access                               | ✅       | `${{ github.token }}`           |
-| `output-path`    | Path where metrics JSON file will be saved                | ❌       | `metrics/delivery_metrics.json` |
-| `commit-results` | Whether to commit the metrics file back to the repository | ❌       | `true`                          |
+| Input            | Description                           | Required | Default                         |
+| ---------------- | ------------------------------------- | -------- | ------------------------------- |
+| `github-token`   | GitHub token for API access           | ✅       | `${{ github.token }}`           |
+| `output-path`    | Path where metrics JSON file is saved | ❌       | `metrics/delivery_metrics.json` |
+| `commit-results` | Commit the metrics file to repository | ❌       | `true`                          |
 
 ### Metric-Specific Inputs
 
-| Input                  | Description                                   | Required | Default |
-| ---------------------- | --------------------------------------------- | -------- | ------- |
-| `deployment-frequency` | Whether to enable deployment frequency metric | ❌       | `false` |
-| `lead-time`            | Whether to enable lead time for change metric | ❌       | `false` |
-| `pr-size`              | Whether to enable PR size metric              | ❌       | `false` |
-| `pr-maturity`          | Whether to enable PR maturity metric          | ❌       | `false` |
-| `team-metrics`         | Whether to enable team metrics                | ❌       | `false` |
+| Input                  | Description                    | Required | Default |
+| ---------------------- | ------------------------------ | -------- | ------- |
+| `deployment-frequency` | Enable deploy frequency metric | ❌       | `false` |
+| `lead-time`            | Enable cycle time metric       | ❌       | `false` |
+| `pr-size`              | Enable PR size metric          | ❌       | `false` |
+| `pr-maturity`          | Enable PR maturity metric      | ❌       | `false` |
+| `team-metrics`         | Enable team metrics            | ❌       | `false` |
 
 ### Team Metrics Configuration
 
 Applies to `team-metrics` metric.
 
-| Input                      | Description                                             | Required | Default                          |
-| -------------------------- | ------------------------------------------------------- | -------- | -------------------------------- |
-| `time-period`              | Time period for analysis (weekly, fortnightly, monthly) | ❌       | `weekly`                         |
-| `team-metrics-output-path` | Path where team metrics markdown report will be saved   | ❌       | `metrics/team_metrics_report.md` |
+| Input                      | Description                      | Required | Default                          |
+| -------------------------- | -------------------------------- | -------- | -------------------------------- |
+| `time-period`              | Time period (weekly/fortnightly) | ❌       | `weekly`                         |
+| `team-metrics-output-path` | Path for team metrics report     | ❌       | `metrics/team_metrics_report.md` |
 
 ### DORA Metrics Configuration
 
 Applies to `deployment-frequency` and `lead-time` metrics.
 
-| Input                   | Description                                                | Required | Default |
-| ----------------------- | ---------------------------------------------------------- | -------- | ------- |
-| `include-merge-commits` | Whether to include merge commits in lead time calculations | ❌       | `false` |
-| `max-releases`          | Maximum number of releases to fetch for analysis           | ❌       | `100`   |
-| `max-tags`              | Maximum number of tags to fetch if no releases are found   | ❌       | `100`   |
+| Input                   | Description                        | Required | Default |
+| ----------------------- | ---------------------------------- | -------- | ------- |
+| `include-merge-commits` | Include merges in cycle time       | ❌       | `false` |
+| `max-releases`          | Max releases to fetch for analysis | ❌       | `100`   |
+| `max-tags`              | Max tags if no releases found      | ❌       | `100`   |
 
 ### DevEx Metrics Configuration
 
 Applies to `pr-size` and `pr-maturity` metrics.
 
-| Input                   | Description                                                 | Required | Default |
-| ----------------------- | ----------------------------------------------------------- | -------- | ------- |
-| `files-to-ignore`       | Comma-separated list of file patterns to ignore for PR size | ❌       | `""`    |
-| `ignore-line-deletions` | Whether to ignore line deletions when calculating PR size   | ❌       | `false` |
-| `ignore-file-deletions` | Whether to ignore file deletions when calculating PR size   | ❌       | `false` |
+| Input                   | Description                      | Required | Default |
+| ----------------------- | -------------------------------- | -------- | ------- |
+| `files-to-ignore`       | File patterns to ignore (comma)  | ❌       | `""`    |
+| `ignore-line-deletions` | Ignore line deletions in PR size | ❌       | `false` |
+| `ignore-file-deletions` | Ignore file deletions in PR size | ❌       | `false` |
 
 ## Outputs
 
@@ -252,39 +252,39 @@ Applies to `pr-size` and `pr-maturity` metrics.
 | Output                 | Description                                 |
 | ---------------------- | ------------------------------------------- |
 | `deployment-frequency` | Days between latest and previous deployment |
-| `lead-time-avg`        | Average lead time for change in hours       |
-| `lead-time-oldest`     | Oldest commit lead time in hours            |
-| `lead-time-newest`     | Newest commit lead time in hours            |
+| `lead-time-avg`        | Average cycle time in hours                 |
+| `lead-time-oldest`     | Oldest commit cycle time in hours           |
+| `lead-time-newest`     | Newest commit cycle time in hours           |
 | `commit-count`         | Number of commits analyzed                  |
 
 ### DevEx Metrics Outputs
 
-| Output                   | Description                                       |
-| ------------------------ | ------------------------------------------------- |
-| `pr-size`                | PR size category (xs, s, m, l, xl)                |
-| `pr-size-category`       | PR size category with prefix (size/xs, size/s...) |
-| `pr-size-details`        | Detailed PR size metrics as JSON string           |
-| `pr-maturity-ratio`      | PR maturity ratio (0.0 to 1.0)                    |
-| `pr-maturity-percentage` | PR maturity percentage (0 to 100)                 |
-| `pr-maturity-details`    | Detailed PR maturity metrics as JSON string       |
+| Output                   | Description                          |
+| ------------------------ | ------------------------------------ |
+| `pr-size`                | PR size category (xs, s, m, l, xl)   |
+| `pr-size-category`       | PR size with prefix (size/xs, etc.)  |
+| `pr-size-details`        | Detailed PR size metrics as JSON     |
+| `pr-maturity-ratio`      | PR maturity ratio (0.0 to 1.0)       |
+| `pr-maturity-percentage` | PR maturity percentage (0 to 100)    |
+| `pr-maturity-details`    | Detailed PR maturity metrics as JSON |
 
 ### Team Metrics Outputs
 
-| Output                     | Description                                      |
-| -------------------------- | ------------------------------------------------ |
-| `team-metrics-json`        | Complete team metrics data as JSON string        |
-| `team-metrics-report-path` | Path to the generated team metrics markdown file |
+| Output                     | Description                   |
+| -------------------------- | ----------------------------- |
+| `team-metrics-json`        | Team metrics data as JSON     |
+| `team-metrics-report-path` | Path to team metrics markdown |
 
 ## Metrics Explained
 
 ### DORA Metrics
 
-#### Deployment Frequency
+#### Deploy Frequency
 
 Measures how often your team deploys code to production. Calculated as the time
 difference between consecutive releases or tags.
 
-#### Lead Time for Change
+#### Cycle Time
 
 Time from when a commit is made to when it's deployed to production. Helps
 identify bottlenecks in your delivery pipeline.
@@ -347,7 +347,7 @@ added after publication.
 - Measure the effectiveness of code review processes
 - Monitor the stability of feature development
 
-#### Team Metrics
+### Team Performance Metrics
 
 Team metrics provide aggregated insights across multiple PRs over a specified
 time period, helping teams understand their development velocity and quality
@@ -370,12 +370,12 @@ patterns.
 
 All time-based metrics are rated on the same 4-level scale:
 
-| Level              | Pickup Time | Approve Time | Merge Time | Merge Frequency      |
-| ------------------ | ----------- | ------------ | ---------- | -------------------- |
-| ⭐ **Elite**       | < 2 hours   | < 17 hours   | < 2 hours  | > 1.6 PRs/dev/week   |
-| ✅ **Good**        | 2-6 hours   | 17-24 hours  | 2-5 hours  | 1.1-1.6 PRs/dev/week |
-| ⚖️ **Fair**        | 7-16 hours  | 25-45 hours  | 6-19 hours | 0.6-1.0 PRs/dev/week |
-| 🎯 **Needs Focus** | > 16 hours  | > 45 hours   | > 19 hours | < 0.6 PRs/dev/week   |
+| Level              | Pickup | Approve | Merge | Frequency            |
+| ------------------ | ------ | ------- | ----- | -------------------- |
+| ⭐ **Elite**       | < 2h   | < 17h   | < 2h  | > 1.6 PRs/dev/week   |
+| ✅ **Good**        | 2-6h   | 17-24h  | 2-5h  | 1.1-1.6 PRs/dev/week |
+| ⚖️ **Fair**        | 7-16h  | 25-45h  | 6-19h | 0.6-1.0 PRs/dev/week |
+| 🎯 **Needs Focus** | > 16h  | > 45h   | > 19h | < 0.6 PRs/dev/week   |
 
 **Outputs:**
 
@@ -426,15 +426,17 @@ The action generates a comprehensive JSON file with the following structure:
     "created_at": "2022-12-25T12:00:00.000Z"
   },
   "metrics": {
-    "deployment_frequency_days": 7,
-    "lead_time_for_change": {
-      "commit_count": 15,
-      "avg_hours": 24.5,
-      "oldest_hours": 72.0,
-      "newest_hours": 2.5,
-      "oldest_commit_sha": "old123",
-      "newest_commit_sha": "new456",
-      "newest_excludes_merges": true
+    "dora": {
+      "deploy_frequency_days": 7,
+      "cycle_time": {
+        "commit_count": 15,
+        "avg_hours": 24.5,
+        "oldest_hours": 72.0,
+        "newest_hours": 2.5,
+        "oldest_commit_sha": "old123",
+        "newest_commit_sha": "new456",
+        "newest_excludes_merges": true
+      }
     }
   }
 }
@@ -454,7 +456,7 @@ for details.
 
 ## Migration Guide
 
-#### v2.x Configuration
+### v2.x Configuration
 
 ```yaml
 - uses: xavius-rb/agile-metrics-action@v2
@@ -465,7 +467,7 @@ for details.
     pr-maturity: 'true'
 ```
 
-#### v3.x Configuration
+### v3.x Configuration
 
 Added `team-metrics`, `time-period` and `team-metrics-output-path`.
 

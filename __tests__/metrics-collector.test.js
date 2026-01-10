@@ -75,8 +75,8 @@ describe('MetricsCollector', () => {
 
       expect(result.source).toBe('release')
       expect(result.latest.tag).toBe('v2.0.0')
-      expect(result.metrics.deployment_frequency_days).toBe(1)
-      expect(result.metrics.lead_time_for_change.commit_count).toBe(1)
+      expect(result.metrics.deploy_frequency_days).toBe(1)
+      expect(result.metrics.cycle_time.commit_count).toBe(1)
     })
 
     it('should fallback to tags when no releases', async () => {
@@ -136,11 +136,11 @@ describe('MetricsCollector', () => {
 
       expect(result.source).toBe('tag')
       expect(result.previous).toBeNull()
-      expect(result.metrics.deployment_frequency_days).toBeNull()
+      expect(result.metrics.deploy_frequency_days).toBeNull()
     })
   })
 
-  describe('calculateLeadTimeForChange', () => {
+  describe('calculateCycleTime', () => {
     it('should exclude merge commits from newest calculation', async () => {
       const latest = { created_at: '2023-01-02T00:00:00Z' }
       const previous = { sha: 'prev-sha' }
@@ -168,10 +168,7 @@ describe('MetricsCollector', () => {
         commits: mockCommits
       })
 
-      const result = await collector.calculateLeadTimeForChange(
-        latest,
-        previous
-      )
+      const result = await collector.calculateCycleTime(latest, previous)
 
       expect(result.commit_count).toBe(2)
       expect(result.newest_excludes_merges).toBe(true)
@@ -199,10 +196,7 @@ describe('MetricsCollector', () => {
         commits: mockCommits
       })
 
-      const result = await collector.calculateLeadTimeForChange(
-        latest,
-        previous
-      )
+      const result = await collector.calculateCycleTime(latest, previous)
 
       expect(result.newest_commit_sha).toBe('commit1')
       expect(result.newest_excludes_merges).toBe(false)

@@ -82,16 +82,16 @@ export class OutputManager {
     // Set DORA metric outputs if available
     const doraMetrics = metricsData.metrics?.dora
     if (doraMetrics) {
-      const ltc = doraMetrics.lead_time_for_change
+      const ct = doraMetrics.cycle_time
 
       core.setOutput(
         'deployment-frequency',
-        doraMetrics.deployment_frequency_days?.toString() || ''
+        doraMetrics.deploy_frequency_days?.toString() || ''
       )
-      core.setOutput('lead-time-avg', ltc?.avg_hours?.toString() || '')
-      core.setOutput('lead-time-oldest', ltc?.oldest_hours?.toString() || '')
-      core.setOutput('lead-time-newest', ltc?.newest_hours?.toString() || '')
-      core.setOutput('commit-count', ltc?.commit_count?.toString() || '0')
+      core.setOutput('lead-time-avg', ct?.avg_hours?.toString() || '')
+      core.setOutput('lead-time-oldest', ct?.oldest_hours?.toString() || '')
+      core.setOutput('lead-time-newest', ct?.newest_hours?.toString() || '')
+      core.setOutput('commit-count', ct?.commit_count?.toString() || '0')
     }
 
     // DevEx outputs are set in main.js to avoid coupling
@@ -117,16 +117,16 @@ export class OutputManager {
       // Add DORA metrics section if available
       const doraMetrics = metricsData.metrics?.dora
       if (doraMetrics) {
-        const ltc = doraMetrics.lead_time_for_change
+        const ct = doraMetrics.cycle_time
         summary += `
 #### DORA Metrics
 - **Source:** ${metricsData.source}
 - **Latest:** ${metricsData.latest?.tag} @ ${metricsData.latest?.created_at}
-- **Deployment Frequency (days):** ${doraMetrics.deployment_frequency_days ?? 'N/A'}
-- **Lead Time for Change:** ${formatHoursToDays(ltc?.avg_hours)}
-  - Number of commits: ${ltc?.commit_count || 0}
-  - Oldest: ${formatHoursToDays(ltc?.oldest_hours)} ${ltc?.oldest_commit_sha ? `(${ltc.oldest_commit_sha.substring(0, 7)})` : ''}
-  - Newest: ${formatHoursToDays(ltc?.newest_hours)} ${ltc?.newest_commit_sha ? `(${ltc.newest_commit_sha.substring(0, 7)})` : ''}
+- **Deploy Frequency (days):** ${doraMetrics.deploy_frequency_days ?? 'N/A'}
+- **Cycle Time:** ${formatHoursToDays(ct?.avg_hours)}
+  - Number of commits: ${ct?.commit_count || 0}
+  - Oldest: ${formatHoursToDays(ct?.oldest_hours)} ${ct?.oldest_commit_sha ? `(${ct.oldest_commit_sha.substring(0, 7)})` : ''}
+  - Newest: ${formatHoursToDays(ct?.newest_hours)} ${ct?.newest_commit_sha ? `(${ct.newest_commit_sha.substring(0, 7)})` : ''}
         `
       }
 
@@ -139,8 +139,10 @@ export class OutputManager {
         if (devexMetrics?.pr_size) {
           const prSize = devexMetrics.pr_size
           const emoji = this.getSizeEmoji(prSize.size)
+          const sizeRating = this.getSizeRating(prSize.size)
+          const sizeRatingEmoji = this.getRatingEmoji(sizeRating)
           summary += `
-- **PR Size:** ${emoji} ${prSize.size.toUpperCase()} (${prSize.category})
+- **PR Size:** ${emoji} ${prSize.size.toUpperCase()} ${sizeRatingEmoji} ${sizeRating} (${prSize.category})
 - **Total Changes:** ${prSize.details.total_changes}
 - **Lines Added:** ${prSize.details.total_additions}
 - **Lines Removed:** ${prSize.details.total_deletions}
@@ -152,8 +154,12 @@ export class OutputManager {
           const maturityEmoji = this.getMaturityEmoji(
             maturity.maturity_percentage
           )
+          const maturityLevel = this.getMaturityLevel(
+            maturity.maturity_percentage
+          )
+          const maturityRatingEmoji = this.getRatingEmoji(maturityLevel)
           summary += `
-- **PR Maturity:** ${maturityEmoji} ${maturity.maturity_percentage}% (${maturity.maturity_ratio})`
+- **PR Maturity:** ${maturityEmoji} ${maturity.maturity_percentage}% ${maturityRatingEmoji} ${maturityLevel} (${maturity.maturity_ratio})`
 
           if (maturity.details && !maturity.details.error) {
             summary += `
@@ -197,6 +203,49 @@ export class OutputManager {
     if (percentage >= 81) return '✅'
     if (percentage >= 75) return '⚖️'
     return '🎯'
+  }
+
+  /**
+   * Get maturity level description
+   * @param {number} percentage - Maturity percentage (0-100)
+   * @returns {string} Maturity level description
+   */
+  getMaturityLevel(percentage) {
+    if (percentage === null || percentage === undefined) return 'Unknown'
+    if (percentage > 88) return 'Elite'
+    if (percentage >= 81) return 'Good'
+    if (percentage >= 75) return 'Fair'
+    return 'Needs Focus'
+  }
+
+  /**
+   * Get size rating based on DevEx categories
+   * @param {string} size - Size category (s, m, l, xl)
+   * @returns {string} Rating
+   */
+  getSizeRating(size) {
+    const ratingMap = {
+      s: 'Elite',
+      m: 'Good',
+      l: 'Fair',
+      xl: 'Needs Focus'
+    }
+    return ratingMap[size] || 'Unknown'
+  }
+
+  /**
+   * Get emoji for rating level
+   * @param {string} rating - Rating level (Elite, Good, Fair, Needs Focus)
+   * @returns {string} Emoji representation
+   */
+  getRatingEmoji(rating) {
+    const emojiMap = {
+      Elite: '⭐',
+      Good: '✅',
+      Fair: '⚖️',
+      'Needs Focus': '🎯'
+    }
+    return emojiMap[rating] || '❓'
   }
 
   /**

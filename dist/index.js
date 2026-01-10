@@ -31843,22 +31843,19 @@ class MetricsCollector {
 
       const metricsData = {};
 
-      // Calculate deployment frequency if enabled
+      // Calculate deploy frequency if enabled
       if (this.options.enabledMetrics.deploymentFrequency) {
-        const deploymentFrequencyDays = this.calculateDeploymentFrequency(
+        const deployFrequencyDays = this.calculateDeployFrequency(
           latest,
           previous
         );
-        metricsData.deployment_frequency_days = deploymentFrequencyDays;
+        metricsData.deploy_frequency_days = deployFrequencyDays;
       }
 
-      // Calculate lead time for change if enabled
+      // Calculate cycle time if enabled
       if (this.options.enabledMetrics.leadTime) {
-        const leadTimeMetrics = await this.calculateLeadTimeForChange(
-          latest,
-          previous
-        );
-        metricsData.lead_time_for_change = leadTimeMetrics;
+        const cycleTimeMetrics = await this.calculateCycleTime(latest, previous);
+        metricsData.cycle_time = cycleTimeMetrics;
       }
 
       // Generate complete metrics object
@@ -31946,12 +31943,12 @@ class MetricsCollector {
   }
 
   /**
-   * Calculate deployment frequency between releases/tags
+   * Calculate deploy frequency between releases/tags
    * @param {Object} latest - Latest release/tag
    * @param {Object} previous - Previous release/tag
    * @returns {number|null} Days between deployments
    */
-  calculateDeploymentFrequency(latest, previous) {
+  calculateDeployFrequency(latest, previous) {
     if (!previous?.created_at) {
       return null
     }
@@ -31961,12 +31958,12 @@ class MetricsCollector {
   }
 
   /**
-   * Calculate lead time for change metrics
+   * Calculate cycle time metrics
    * @param {Object} latest - Latest release/tag
    * @param {Object} previous - Previous release/tag
-   * @returns {Promise<Object>} Lead time metrics
+   * @returns {Promise<Object>} Cycle time metrics
    */
-  async calculateLeadTimeForChange(latest, previous) {
+  async calculateCycleTime(latest, previous) {
     let allCommits = [];
     let commitDates = [];
 
@@ -32564,10 +32561,12 @@ class DevExMetricsCollector {
     try {
       const { size, details } = prSizeMetrics;
       const sizeEmoji = this.getSizeEmoji(size);
+      const sizeRating = this.getSizeRating(size);
+      const sizeRatingEmoji = this.getRatingEmoji(sizeRating);
 
-      let comment = `## ${sizeEmoji} PR Size: ${size.toUpperCase()}
+      let comment = `## ${sizeEmoji} PR Size: ${size.toUpperCase()} ${sizeRatingEmoji} ${sizeRating}
 
-This pull request has been automatically categorized as **${size}** based on the following metrics:
+This pull request has been automatically categorized as **${size}** with a **${sizeRating}** rating based on the following metrics:
 
 - **Lines added:** ${details.total_additions}
 - **Lines removed:** ${details.total_deletions}
@@ -32582,10 +32581,11 @@ This pull request has been automatically categorized as **${size}** based on the
         const maturityLevel = this.getMaturityLevel(
           prMaturityMetrics.maturity_percentage
         );
+        const maturityRatingEmoji = this.getRatingEmoji(maturityLevel);
 
         comment += `
 
-## ${maturityEmoji} PR Maturity: ${prMaturityMetrics.maturity_percentage}%
+## ${maturityEmoji} PR Maturity: ${prMaturityMetrics.maturity_percentage}% ${maturityRatingEmoji} ${maturityLevel}
 
 This pull request has a **${maturityLevel}** maturity rating based on code stability:
 
@@ -32634,6 +32634,36 @@ This pull request has a **${maturityLevel}** maturity rating based on code stabi
       xl: '🔥'
     };
     return emojiMap[size] || '❓'
+  }
+
+  /**
+   * Get size rating based on DevEx categories
+   * @param {string} size - Size category (s, m, l, xl)
+   * @returns {string} Rating
+   */
+  getSizeRating(size) {
+    const ratingMap = {
+      s: 'Elite',
+      m: 'Good',
+      l: 'Fair',
+      xl: 'Needs Focus'
+    };
+    return ratingMap[size] || 'Unknown'
+  }
+
+  /**
+   * Get emoji for rating level
+   * @param {string} rating - Rating level (Elite, Good, Fair, Needs Focus)
+   * @returns {string} Emoji representation
+   */
+  getRatingEmoji(rating) {
+    const emojiMap = {
+      Elite: '⭐',
+      Good: '✅',
+      Fair: '⚖️',
+      'Needs Focus': '🎯'
+    };
+    return emojiMap[rating] || '❓'
   }
 
   /**
@@ -33053,12 +33083,30 @@ class TeamMetricsCollector {
       }
     });
 
+    // Calculate predominant size and rating
+    let predominantSize = 'unknown';
+    let maxCount = 0;
+    Object.entries(sizes).forEach(([size, count]) => {
+      if (size !== 'unknown' && count > maxCount) {
+        maxCount = count;
+        predominantSize = size;
+      }
+    });
+
+    const predominantRating = this.ratePRSize(predominantSize);
+    const predominantPercent =
+      total > 0 ? Math.round((maxCount / total) * 100) : 0;
+
     return {
       small_percent: total > 0 ? Math.round((sizes.s / total) * 100) : 0,
       medium_percent: total > 0 ? Math.round((sizes.m / total) * 100) : 0,
       large_percent: total > 0 ? Math.round((sizes.l / total) * 100) : 0,
       xl_percent: total > 0 ? Math.round((sizes.xl / total) * 100) : 0,
-      unknown_percent: total > 0 ? Math.round((sizes.unknown / total) * 100) : 0
+      unknown_percent:
+        total > 0 ? Math.round((sizes.unknown / total) * 100) : 0,
+      predominant_size: predominantSize,
+      predominant_rating: predominantRating,
+      predominant_percent: predominantPercent
     }
   }
 
@@ -33127,6 +33175,58 @@ class TeamMetricsCollector {
   }
 
   /**
+   * Rate deploy frequency
+   * @param {number} frequency - Deploy frequency (days between deployments)
+   * @returns {string} Rating
+   */
+  rateDeployFrequency(frequency) {
+    if (frequency > 0.9) return 'Elite'
+    if (frequency >= 0.5) return 'Good'
+    if (frequency >= 0.2) return 'Fair'
+    return 'Needs Focus'
+  }
+
+  /**
+   * Rate cycle time
+   * @param {number} hours - Cycle time in hours
+   * @returns {string} Rating
+   */
+  rateCycleTime(hours) {
+    if (hours < 45) return 'Elite'
+    if (hours <= 95) return 'Good'
+    if (hours <= 169) return 'Fair'
+    return 'Needs Focus'
+  }
+
+  /**
+   * Rate PR size
+   * @param {string} size - PR size (s, m, l, xl)
+   * @returns {string} Rating
+   */
+  ratePRSize(size) {
+    const sizeMap = {
+      s: 'Elite',
+      m: 'Good',
+      l: 'Fair',
+      xl: 'Needs Focus'
+    };
+    return sizeMap[size] || 'Unknown'
+  }
+
+  /**
+   * Rate PR maturity
+   * @param {number} percentage - Maturity percentage (0-100)
+   * @returns {string} Rating
+   */
+  ratePRMaturity(percentage) {
+    if (percentage === null || percentage === undefined) return 'Unknown'
+    if (percentage > 88) return 'Elite'
+    if (percentage >= 81) return 'Good'
+    if (percentage >= 75) return 'Fair'
+    return 'Needs Focus'
+  }
+
+  /**
    * Get emoji for rating
    * @param {string} rating - Rating
    * @returns {string} Emoji
@@ -33142,15 +33242,29 @@ class TeamMetricsCollector {
   }
 
   /**
+   * Format date to readable string (e.g., "9 Dec 2025")
+   * @param {string} dateString - ISO date string
+   * @returns {string} Formatted date
+   */
+  formatDate(dateString) {
+    const date = new Date(dateString);
+    const day = date.getDate();
+    const month = date.toLocaleString('en-US', { month: 'short' });
+    const year = date.getFullYear();
+    return `${day} ${month} ${year}`
+  }
+
+  /**
    * Generate markdown report
    * @param {Object} metricsData - Team metrics data
    * @returns {string} Markdown report
    */
   generateMarkdownReport(metricsData) {
     if (metricsData.error) {
-      return `# Team Metrics Report
+      return `# 📊 Team Metrics Report
 
-**Period:** ${metricsData.period}
+| **Period** | ${metricsData.period} |
+| ---------- | --------------------- |
 
 ⚠️ **Error:** ${metricsData.error}
 `
@@ -33159,61 +33273,106 @@ class TeamMetricsCollector {
     const { metrics, period, date_range, total_prs, unique_authors } =
       metricsData;
 
-    let report = `# Team Metrics Report
+    const startDate = this.formatDate(date_range.start);
+    const endDate = this.formatDate(date_range.end);
 
-**Period:** ${period}
-**Date Range:** ${date_range.start.split('T')[0]} to ${date_range.end.split('T')[0]}
-**Total PRs:** ${total_prs}
-**Unique Authors:** ${unique_authors}
+    let report = `# 📊 Team Metrics Report
+
+| **Period**        | ${period.charAt(0).toUpperCase() + period.slice(1)} |
+| ----------------- | --------------------------------------------------- |
+| **Date Range**    | ${startDate} → ${endDate}                           |
+| **Total PRs**     | ${total_prs}                                        |
+| **Unique Authors**| ${unique_authors}                                   |
 
 ---
 
-## 📊 Review Time Metrics
+## 🚀 DORA Metrics
 
+`;
+
+    // Add Deploy Frequency and Cycle Time if available
+    if (metricsData.dora_metrics) {
+      const doraMetrics = metricsData.dora_metrics;
+
+      report += `| Metric | Value | Rating | Details |\n`;
+      report += `| ------ | ----- | ------ | ------- |\n`;
+
+      if (
+        doraMetrics.deploy_frequency_days !== undefined &&
+        doraMetrics.deploy_frequency_days !== null
+      ) {
+        const deployFreqRating = this.rateDeployFrequency(
+          doraMetrics.deploy_frequency_days
+        );
+        const deployFreqEmoji = this.getRatingEmoji(deployFreqRating);
+        report += `| **Deploy Frequency** | ${doraMetrics.deploy_frequency_days} days | ${deployFreqEmoji} ${deployFreqRating} | Days between deployments to production |\n`;
+      }
+
+      if (
+        doraMetrics.cycle_time?.avg_hours !== undefined &&
+        doraMetrics.cycle_time?.avg_hours !== null
+      ) {
+        const cycleTimeRating = this.rateCycleTime(
+          doraMetrics.cycle_time.avg_hours
+        );
+        const cycleTimeEmoji = this.getRatingEmoji(cycleTimeRating);
+        report += `| **Cycle Time** | ${doraMetrics.cycle_time.avg_hours}h | ${cycleTimeEmoji} ${cycleTimeRating} | Avg. time from commit to deployment (${doraMetrics.cycle_time.commit_count || 0} commits) |\n`;
+      }
+
+      report += `\n---\n\n`;
+    }
+
+    report += `## ⏱️ Review Time Metrics
+
+| Metric | Average | Rating | Sample Size |
+| ------ | ------- | ------ | ----------- |
+`;
+
+    report += `## ⏱️ Review Time Metrics
+
+| Metric | Average | Rating | Sample Size |
+| ------ | ------- | ------ | ----------- |
 `;
 
     // Pickup Time
     if (metrics.pickup_time.average_hours !== null) {
       const emoji = this.getRatingEmoji(metrics.pickup_time.rating);
-      report += `### ${emoji} Pickup Time: ${metrics.pickup_time.average_hours}h (${metrics.pickup_time.rating})
-
-Time from PR creation to first review activity.
-- **Sample Size:** ${metrics.pickup_time.sample_size} PRs
-
-`;
+      report += `| **Pickup Time** | ${metrics.pickup_time.average_hours}h | ${emoji} ${metrics.pickup_time.rating} | ${metrics.pickup_time.sample_size} PRs |\n`;
     }
 
     // Approve Time
     if (metrics.approve_time.average_hours !== null) {
       const emoji = this.getRatingEmoji(metrics.approve_time.rating);
-      report += `### ${emoji} Approve Time: ${metrics.approve_time.average_hours}h (${metrics.approve_time.rating})
-
-Time from first review activity (or PR creation) to first approval.
-- **Sample Size:** ${metrics.approve_time.sample_size} PRs
-
-`;
+      report += `| **Approve Time** | ${metrics.approve_time.average_hours}h | ${emoji} ${metrics.approve_time.rating} | ${metrics.approve_time.sample_size} PRs |\n`;
     }
 
     // Merge Time
     if (metrics.merge_time.average_hours !== null) {
       const emoji = this.getRatingEmoji(metrics.merge_time.rating);
-      report += `### ${emoji} Merge Time: ${metrics.merge_time.average_hours}h (${metrics.merge_time.rating})
+      report += `| **Merge Time** | ${metrics.merge_time.average_hours}h | ${emoji} ${metrics.merge_time.rating} | ${metrics.merge_time.sample_size} PRs |\n`;
+    }
 
-Time from first approval to merge.
-- **Sample Size:** ${metrics.merge_time.sample_size} PRs
+    report += `
+
+**Metric Definitions:**
+- **Pickup Time:** Time from PR creation to first review activity
+- **Approve Time:** Time from first review activity (or PR creation) to first approval
+- **Merge Time:** Time from first approval to merge
+
+---
+
+## 🚀 Merge Frequency
 
 `;
-    }
 
     // Merge Frequency
     const freqEmoji = this.getRatingEmoji(metrics.merge_frequency.rating);
-    report += `---
-
-## ${freqEmoji} Merge Frequency: ${metrics.merge_frequency.value} PRs/dev/week (${metrics.merge_frequency.rating})
-
-- **Merged PRs:** ${metrics.merge_frequency.merged_prs}
-- **Total PRs:** ${metrics.merge_frequency.total_prs}
-- **Unique Authors:** ${metrics.merge_frequency.unique_authors}
+    report += `| Metric | Value | Rating |
+| ------ | ----- | ------ |
+| **Merge Frequency** | ${metrics.merge_frequency.value} PRs/dev/week | ${freqEmoji} ${metrics.merge_frequency.rating} |
+| **Merged PRs** | ${metrics.merge_frequency.merged_prs} | |
+| **Total PRs** | ${metrics.merge_frequency.total_prs} | |
+| **Unique Authors** | ${metrics.merge_frequency.unique_authors} | |
 
 ---
 
@@ -33222,14 +33381,20 @@ Time from first approval to merge.
 `;
 
     const dist = metrics.size_distribution;
-    report += `- **Small:** ${dist.small_percent}%
-- **Medium:** ${dist.medium_percent}%
-- **Large:** ${dist.large_percent}%
-- **XL:** ${dist.xl_percent}%
-${dist.unknown_percent > 0 ? `- **Unknown:** ${dist.unknown_percent}%\n` : ''}
+    const predominantEmoji = this.getRatingEmoji(dist.predominant_rating);
+    report += `| Size | Percentage | Rating |
+| ---- | ---------- | ------ |
+| **Small (S)** | ${dist.small_percent}% | ⭐ Elite |
+| **Medium (M)** | ${dist.medium_percent}% | ✅ Good |
+| **Large (L)** | ${dist.large_percent}% | ⚖️ Fair |
+| **Extra Large (XL)** | ${dist.xl_percent}% | 🎯 Needs Focus |
+${dist.unknown_percent > 0 ? `| **Unknown** | ${dist.unknown_percent}% | ❓ Unknown |\n` : ''}
+
+**Predominant Size:** ${predominantEmoji} ${dist.predominant_size.toUpperCase()} (${dist.predominant_percent}%) - ${dist.predominant_rating}
+
 ---
 
-*Report generated on ${new Date(metricsData.timestamp).toLocaleString()}*
+*Report generated on ${new Date(metricsData.timestamp).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}*
 `;
 
     return report
@@ -33322,16 +33487,16 @@ class OutputManager {
     // Set DORA metric outputs if available
     const doraMetrics = metricsData.metrics?.dora;
     if (doraMetrics) {
-      const ltc = doraMetrics.lead_time_for_change;
+      const ct = doraMetrics.cycle_time;
 
       coreExports.setOutput(
         'deployment-frequency',
-        doraMetrics.deployment_frequency_days?.toString() || ''
+        doraMetrics.deploy_frequency_days?.toString() || ''
       );
-      coreExports.setOutput('lead-time-avg', ltc?.avg_hours?.toString() || '');
-      coreExports.setOutput('lead-time-oldest', ltc?.oldest_hours?.toString() || '');
-      coreExports.setOutput('lead-time-newest', ltc?.newest_hours?.toString() || '');
-      coreExports.setOutput('commit-count', ltc?.commit_count?.toString() || '0');
+      coreExports.setOutput('lead-time-avg', ct?.avg_hours?.toString() || '');
+      coreExports.setOutput('lead-time-oldest', ct?.oldest_hours?.toString() || '');
+      coreExports.setOutput('lead-time-newest', ct?.newest_hours?.toString() || '');
+      coreExports.setOutput('commit-count', ct?.commit_count?.toString() || '0');
     }
 
     // DevEx outputs are set in main.js to avoid coupling
@@ -33357,16 +33522,16 @@ class OutputManager {
       // Add DORA metrics section if available
       const doraMetrics = metricsData.metrics?.dora;
       if (doraMetrics) {
-        const ltc = doraMetrics.lead_time_for_change;
+        const ct = doraMetrics.cycle_time;
         summary += `
 #### DORA Metrics
 - **Source:** ${metricsData.source}
 - **Latest:** ${metricsData.latest?.tag} @ ${metricsData.latest?.created_at}
-- **Deployment Frequency (days):** ${doraMetrics.deployment_frequency_days ?? 'N/A'}
-- **Lead Time for Change:** ${formatHoursToDays(ltc?.avg_hours)}
-  - Number of commits: ${ltc?.commit_count || 0}
-  - Oldest: ${formatHoursToDays(ltc?.oldest_hours)} ${ltc?.oldest_commit_sha ? `(${ltc.oldest_commit_sha.substring(0, 7)})` : ''}
-  - Newest: ${formatHoursToDays(ltc?.newest_hours)} ${ltc?.newest_commit_sha ? `(${ltc.newest_commit_sha.substring(0, 7)})` : ''}
+- **Deploy Frequency (days):** ${doraMetrics.deploy_frequency_days ?? 'N/A'}
+- **Cycle Time:** ${formatHoursToDays(ct?.avg_hours)}
+  - Number of commits: ${ct?.commit_count || 0}
+  - Oldest: ${formatHoursToDays(ct?.oldest_hours)} ${ct?.oldest_commit_sha ? `(${ct.oldest_commit_sha.substring(0, 7)})` : ''}
+  - Newest: ${formatHoursToDays(ct?.newest_hours)} ${ct?.newest_commit_sha ? `(${ct.newest_commit_sha.substring(0, 7)})` : ''}
         `;
       }
 
@@ -33379,8 +33544,10 @@ class OutputManager {
         if (devexMetrics?.pr_size) {
           const prSize = devexMetrics.pr_size;
           const emoji = this.getSizeEmoji(prSize.size);
+          const sizeRating = this.getSizeRating(prSize.size);
+          const sizeRatingEmoji = this.getRatingEmoji(sizeRating);
           summary += `
-- **PR Size:** ${emoji} ${prSize.size.toUpperCase()} (${prSize.category})
+- **PR Size:** ${emoji} ${prSize.size.toUpperCase()} ${sizeRatingEmoji} ${sizeRating} (${prSize.category})
 - **Total Changes:** ${prSize.details.total_changes}
 - **Lines Added:** ${prSize.details.total_additions}
 - **Lines Removed:** ${prSize.details.total_deletions}
@@ -33392,8 +33559,12 @@ class OutputManager {
           const maturityEmoji = this.getMaturityEmoji(
             maturity.maturity_percentage
           );
+          const maturityLevel = this.getMaturityLevel(
+            maturity.maturity_percentage
+          );
+          const maturityRatingEmoji = this.getRatingEmoji(maturityLevel);
           summary += `
-- **PR Maturity:** ${maturityEmoji} ${maturity.maturity_percentage}% (${maturity.maturity_ratio})`;
+- **PR Maturity:** ${maturityEmoji} ${maturity.maturity_percentage}% ${maturityRatingEmoji} ${maturityLevel} (${maturity.maturity_ratio})`;
 
           if (maturity.details && !maturity.details.error) {
             summary += `
@@ -33437,6 +33608,49 @@ class OutputManager {
     if (percentage >= 81) return '✅'
     if (percentage >= 75) return '⚖️'
     return '🎯'
+  }
+
+  /**
+   * Get maturity level description
+   * @param {number} percentage - Maturity percentage (0-100)
+   * @returns {string} Maturity level description
+   */
+  getMaturityLevel(percentage) {
+    if (percentage === null || percentage === undefined) return 'Unknown'
+    if (percentage > 88) return 'Elite'
+    if (percentage >= 81) return 'Good'
+    if (percentage >= 75) return 'Fair'
+    return 'Needs Focus'
+  }
+
+  /**
+   * Get size rating based on DevEx categories
+   * @param {string} size - Size category (s, m, l, xl)
+   * @returns {string} Rating
+   */
+  getSizeRating(size) {
+    const ratingMap = {
+      s: 'Elite',
+      m: 'Good',
+      l: 'Fair',
+      xl: 'Needs Focus'
+    };
+    return ratingMap[size] || 'Unknown'
+  }
+
+  /**
+   * Get emoji for rating level
+   * @param {string} rating - Rating level (Elite, Good, Fair, Needs Focus)
+   * @returns {string} Emoji representation
+   */
+  getRatingEmoji(rating) {
+    const emojiMap = {
+      Elite: '⭐',
+      Good: '✅',
+      Fair: '⚖️',
+      'Needs Focus': '🎯'
+    };
+    return emojiMap[rating] || '❓'
   }
 
   /**
@@ -33581,7 +33795,7 @@ async function run() {
       `Configuration: outputPath=${outputPath}, commitResults=${commitResults}, includeMergeCommits=${includeMergeCommits}`
     );
     coreExports.debug(
-      `Metrics enabled: Deployment Frequency=${enableDeploymentFrequency}, Lead Time=${enableLeadTime}, PR Size=${enablePrSize}, PR Maturity=${enablePrMaturity}`
+      `Metrics enabled: Deploy Frequency=${enableDeploymentFrequency}, Cycle Time=${enableLeadTime}, PR Size=${enablePrSize}, PR Maturity=${enablePrMaturity}`
     );
 
     // Initialize components
@@ -33601,10 +33815,10 @@ async function run() {
     if (needDoraMetrics) {
       const enabledDoraMetrics = [];
       if (enableDeploymentFrequency) {
-        enabledDoraMetrics.push('deployment frequency');
+        enabledDoraMetrics.push('deploy frequency');
       }
       if (enableLeadTime) {
-        enabledDoraMetrics.push('lead time');
+        enabledDoraMetrics.push('cycle time');
       }
 
       coreExports.info(`Collecting DORA metrics: ${enabledDoraMetrics.join(', ')}...`);
@@ -33717,13 +33931,13 @@ async function run() {
 
         if (enableDeploymentFrequency) {
           coreExports.info(
-            `Deployment frequency: ${combinedMetricsData.metrics?.dora?.deployment_frequency_days ?? 'N/A'} days`
+            `Deploy frequency: ${combinedMetricsData.metrics?.dora?.deploy_frequency_days ?? 'N/A'} days`
           );
         }
 
         if (enableLeadTime) {
           coreExports.info(
-            `Lead time (avg): ${combinedMetricsData.metrics?.dora?.lead_time_for_change?.avg_hours ?? 'N/A'} hours`
+            `Cycle time (avg): ${combinedMetricsData.metrics?.dora?.cycle_time?.avg_hours ?? 'N/A'} hours`
           );
         }
       }
@@ -33771,12 +33985,30 @@ async function runTeamMetrics(
     coreExports.info(`Time period: ${timePeriod}`);
 
     const githubClient = new GitHubClient(githubToken, owner, repo);
+
+    // Collect DORA metrics (deploy frequency and cycle time)
+    const metricsCollector = new MetricsCollector(githubClient, {
+      includeMergeCommits: false,
+      maxReleases: 100,
+      maxTags: 100,
+      enabledMetrics: {
+        deploymentFrequency: true,
+        leadTime: true
+      }
+    });
+    const doraMetrics = await metricsCollector.collectMetrics();
+
     const teamMetricsCollector = new TeamMetricsCollector(githubClient, {
       timePeriod
     });
 
     // Collect team metrics
     const metricsData = await teamMetricsCollector.collectMetrics();
+
+    // Add DORA metrics to team metrics
+    if (doraMetrics && doraMetrics.metrics) {
+      metricsData.dora_metrics = doraMetrics.metrics;
+    }
 
     // Generate markdown report
     const markdownReport =

@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Collect Deployment Frequency & Lead Time for Change
+      - name: Collect Deploy Frequency & Cycle Time
         id: collect
         uses: actions/github-script@v7
         with:
@@ -156,13 +156,13 @@ jobs:
               return;
             }
 
-            // Deployment Frequency = time between latest and previous creation times (days)
-            let deployment_frequency_days = null;
+            // Deploy Frequency = time between latest and previous creation times (days)
+            let deploy_frequency_days = null;
             if (previous?.created_at) {
-              deployment_frequency_days = Number(daysBetween(latest.created_at, previous.created_at).toFixed(3));
+              deploy_frequency_days = Number(daysBetween(latest.created_at, previous.created_at).toFixed(3));
             }
 
-            // Lead Time for Change
+            // Cycle Time
             // Compare commits between previous->latest. If no previous, use just the tagged commit.
             let commitDates = [];
             let allCommits = [];
@@ -183,7 +183,7 @@ jobs:
               if (dt) commitDates = [dt];
             }
 
-            let ltc_avg_hours = null, ltc_oldest_hours = null, ltc_newest_hours = null;
+            let ct_avg_hours = null, ct_oldest_hours = null, ct_newest_hours = null;
             let oldestCommitSha = null, newestCommitSha = null;
             if (commitDates.length > 0) {
               const commitsWithAges = allCommits.map(c => ({
@@ -198,9 +198,9 @@ jobs:
                 // Calculate overall stats using all commits (including merges)
                 const ages = commitsWithAges.map(c => c.age);
                 const sum = ages.reduce((a,b)=>a+b,0);
-                ltc_avg_hours = Number((sum/ages.length).toFixed(2));
-                ltc_oldest_hours = Number(Math.max(...ages).toFixed(2));
-                ltc_newest_hours = Number(Math.min(...ages).toFixed(2));
+                ct_avg_hours = Number((sum/ages.length).toFixed(2));
+                ct_oldest_hours = Number(Math.max(...ages).toFixed(2));
+                ct_newest_hours = Number(Math.min(...ages).toFixed(2));
 
                 // Find oldest commit (can be merge or non-merge)
                 const oldestCommit = commitsWithAges.find(c => c.age === Math.max(...ages));
@@ -212,7 +212,7 @@ jobs:
                   const newestNonMerge = nonMergeCommits.find(c => c.age === Math.min(...nonMergeCommits.map(nc => nc.age)));
                   newestCommitSha = newestNonMerge?.sha;
                   // Update newest_hours to reflect the newest non-merge commit
-                  ltc_newest_hours = Number(Math.min(...nonMergeCommits.map(c => c.age)).toFixed(2));
+                  ct_newest_hours = Number(Math.min(...nonMergeCommits.map(c => c.age)).toFixed(2));
                 } else {
                   // Fallback: if all commits are merges, use the newest merge commit
                   const newestCommit = commitsWithAges.find(c => c.age === Math.min(...ages));
@@ -222,9 +222,9 @@ jobs:
                 // Fallback to original logic if we can't match commits with dates
                 const ages = commitDates.map(dt => hoursBetween(latest.created_at, dt));
                 const sum = ages.reduce((a,b)=>a+b,0);
-                ltc_avg_hours = Number((sum/ages.length).toFixed(2));
-                ltc_oldest_hours = Number(Math.max(...ages).toFixed(2));
-                ltc_newest_hours = Number(Math.min(...ages).toFixed(2));
+                ct_avg_hours = Number((sum/ages.length).toFixed(2));
+                ct_oldest_hours = Number(Math.max(...ages).toFixed(2));
+                ct_newest_hours = Number(Math.min(...ages).toFixed(2));
               }
             }
 
@@ -245,12 +245,12 @@ jobs:
                 created_at: previous.created_at ? iso(previous.created_at) : null
               } : null,
               metrics: {
-                deployment_frequency_days,
-                lead_time_for_change: {
+                deploy_frequency_days,
+                cycle_time: {
                   commit_count: commitDates.length,
-                  avg_hours: ltc_avg_hours,
-                  oldest_hours: ltc_oldest_hours,
-                  newest_hours: ltc_newest_hours,
+                  avg_hours: ct_avg_hours,
+                  oldest_hours: ct_oldest_hours,
+                  newest_hours: ct_newest_hours,
                   oldest_commit_sha: oldestCommitSha,
                   newest_commit_sha: newestCommitSha,
                   newest_excludes_merges: true
@@ -275,12 +275,12 @@ jobs:
             ### Delivery Metrics
             - **Source:** ${out.source}
             - **Latest:** ${out.latest.tag} @ ${out.latest.created_at}
-            - **Deployment Frequency (days):** ${out.metrics.deployment_frequency_days ?? "N/A"}
-            - **Lead Time for Change**
-              - commit_count: ${out.metrics.lead_time_for_change.commit_count}
-              - avg: ${formatHoursToDays(out.metrics.lead_time_for_change.avg_hours)}
-              - oldest: ${formatHoursToDays(out.metrics.lead_time_for_change.oldest_hours)} ${out.metrics.lead_time_for_change.oldest_commit_sha ? `(${out.metrics.lead_time_for_change.oldest_commit_sha.substring(0, 7)})` : ''}
-              - newest: ${formatHoursToDays(out.metrics.lead_time_for_change.newest_hours)} ${out.metrics.lead_time_for_change.newest_commit_sha ? `(${out.metrics.lead_time_for_change.newest_commit_sha.substring(0, 7)})` : ''}
+            - **Deploy Frequency (days):** ${out.metrics.deploy_frequency_days ?? "N/A"}
+            - **Cycle Time**
+              - commit_count: ${out.metrics.cycle_time.commit_count}
+              - avg: ${formatHoursToDays(out.metrics.cycle_time.avg_hours)}
+              - oldest: ${formatHoursToDays(out.metrics.cycle_time.oldest_hours)} ${out.metrics.cycle_time.oldest_commit_sha ? `(${out.metrics.cycle_time.oldest_commit_sha.substring(0, 7)})` : ''}
+              - newest: ${formatHoursToDays(out.metrics.cycle_time.newest_hours)} ${out.metrics.cycle_time.newest_commit_sha ? `(${out.metrics.cycle_time.newest_commit_sha.substring(0, 7)})` : ''}
             `;
             await core.summary.addRaw(summary).write();
 

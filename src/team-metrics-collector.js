@@ -390,12 +390,30 @@ export class TeamMetricsCollector {
       }
     })
 
+    // Calculate predominant size and rating
+    let predominantSize = 'unknown'
+    let maxCount = 0
+    Object.entries(sizes).forEach(([size, count]) => {
+      if (size !== 'unknown' && count > maxCount) {
+        maxCount = count
+        predominantSize = size
+      }
+    })
+
+    const predominantRating = this.ratePRSize(predominantSize)
+    const predominantPercent =
+      total > 0 ? Math.round((maxCount / total) * 100) : 0
+
     return {
       small_percent: total > 0 ? Math.round((sizes.s / total) * 100) : 0,
       medium_percent: total > 0 ? Math.round((sizes.m / total) * 100) : 0,
       large_percent: total > 0 ? Math.round((sizes.l / total) * 100) : 0,
       xl_percent: total > 0 ? Math.round((sizes.xl / total) * 100) : 0,
-      unknown_percent: total > 0 ? Math.round((sizes.unknown / total) * 100) : 0
+      unknown_percent:
+        total > 0 ? Math.round((sizes.unknown / total) * 100) : 0,
+      predominant_size: predominantSize,
+      predominant_rating: predominantRating,
+      predominant_percent: predominantPercent
     }
   }
 
@@ -464,6 +482,58 @@ export class TeamMetricsCollector {
   }
 
   /**
+   * Rate deploy frequency
+   * @param {number} frequency - Deploy frequency (days between deployments)
+   * @returns {string} Rating
+   */
+  rateDeployFrequency(frequency) {
+    if (frequency > 0.9) return 'Elite'
+    if (frequency >= 0.5) return 'Good'
+    if (frequency >= 0.2) return 'Fair'
+    return 'Needs Focus'
+  }
+
+  /**
+   * Rate cycle time
+   * @param {number} hours - Cycle time in hours
+   * @returns {string} Rating
+   */
+  rateCycleTime(hours) {
+    if (hours < 45) return 'Elite'
+    if (hours <= 95) return 'Good'
+    if (hours <= 169) return 'Fair'
+    return 'Needs Focus'
+  }
+
+  /**
+   * Rate PR size
+   * @param {string} size - PR size (s, m, l, xl)
+   * @returns {string} Rating
+   */
+  ratePRSize(size) {
+    const sizeMap = {
+      s: 'Elite',
+      m: 'Good',
+      l: 'Fair',
+      xl: 'Needs Focus'
+    }
+    return sizeMap[size] || 'Unknown'
+  }
+
+  /**
+   * Rate PR maturity
+   * @param {number} percentage - Maturity percentage (0-100)
+   * @returns {string} Rating
+   */
+  ratePRMaturity(percentage) {
+    if (percentage === null || percentage === undefined) return 'Unknown'
+    if (percentage > 88) return 'Elite'
+    if (percentage >= 81) return 'Good'
+    if (percentage >= 75) return 'Fair'
+    return 'Needs Focus'
+  }
+
+  /**
    * Get emoji for rating
    * @param {string} rating - Rating
    * @returns {string} Emoji
@@ -479,15 +549,29 @@ export class TeamMetricsCollector {
   }
 
   /**
+   * Format date to readable string (e.g., "9 Dec 2025")
+   * @param {string} dateString - ISO date string
+   * @returns {string} Formatted date
+   */
+  formatDate(dateString) {
+    const date = new Date(dateString)
+    const day = date.getDate()
+    const month = date.toLocaleString('en-US', { month: 'short' })
+    const year = date.getFullYear()
+    return `${day} ${month} ${year}`
+  }
+
+  /**
    * Generate markdown report
    * @param {Object} metricsData - Team metrics data
    * @returns {string} Markdown report
    */
   generateMarkdownReport(metricsData) {
     if (metricsData.error) {
-      return `# Team Metrics Report
+      return `# 📊 Team Metrics Report
 
-**Period:** ${metricsData.period}
+| **Period** | ${metricsData.period} |
+| ---------- | --------------------- |
 
 ⚠️ **Error:** ${metricsData.error}
 `
@@ -496,61 +580,106 @@ export class TeamMetricsCollector {
     const { metrics, period, date_range, total_prs, unique_authors } =
       metricsData
 
-    let report = `# Team Metrics Report
+    const startDate = this.formatDate(date_range.start)
+    const endDate = this.formatDate(date_range.end)
 
-**Period:** ${period}
-**Date Range:** ${date_range.start.split('T')[0]} to ${date_range.end.split('T')[0]}
-**Total PRs:** ${total_prs}
-**Unique Authors:** ${unique_authors}
+    let report = `# 📊 Team Metrics Report
+
+| **Period**        | ${period.charAt(0).toUpperCase() + period.slice(1)} |
+| ----------------- | --------------------------------------------------- |
+| **Date Range**    | ${startDate} → ${endDate}                           |
+| **Total PRs**     | ${total_prs}                                        |
+| **Unique Authors**| ${unique_authors}                                   |
 
 ---
 
-## 📊 Review Time Metrics
+## 🚀 DORA Metrics
 
+`
+
+    // Add Deploy Frequency and Cycle Time if available
+    if (metricsData.dora_metrics) {
+      const doraMetrics = metricsData.dora_metrics
+
+      report += `| Metric | Value | Rating | Details |\n`
+      report += `| ------ | ----- | ------ | ------- |\n`
+
+      if (
+        doraMetrics.deploy_frequency_days !== undefined &&
+        doraMetrics.deploy_frequency_days !== null
+      ) {
+        const deployFreqRating = this.rateDeployFrequency(
+          doraMetrics.deploy_frequency_days
+        )
+        const deployFreqEmoji = this.getRatingEmoji(deployFreqRating)
+        report += `| **Deploy Frequency** | ${doraMetrics.deploy_frequency_days} days | ${deployFreqEmoji} ${deployFreqRating} | Days between deployments to production |\n`
+      }
+
+      if (
+        doraMetrics.cycle_time?.avg_hours !== undefined &&
+        doraMetrics.cycle_time?.avg_hours !== null
+      ) {
+        const cycleTimeRating = this.rateCycleTime(
+          doraMetrics.cycle_time.avg_hours
+        )
+        const cycleTimeEmoji = this.getRatingEmoji(cycleTimeRating)
+        report += `| **Cycle Time** | ${doraMetrics.cycle_time.avg_hours}h | ${cycleTimeEmoji} ${cycleTimeRating} | Avg. time from commit to deployment (${doraMetrics.cycle_time.commit_count || 0} commits) |\n`
+      }
+
+      report += `\n---\n\n`
+    }
+
+    report += `## ⏱️ Review Time Metrics
+
+| Metric | Average | Rating | Sample Size |
+| ------ | ------- | ------ | ----------- |
+`
+
+    report += `## ⏱️ Review Time Metrics
+
+| Metric | Average | Rating | Sample Size |
+| ------ | ------- | ------ | ----------- |
 `
 
     // Pickup Time
     if (metrics.pickup_time.average_hours !== null) {
       const emoji = this.getRatingEmoji(metrics.pickup_time.rating)
-      report += `### ${emoji} Pickup Time: ${metrics.pickup_time.average_hours}h (${metrics.pickup_time.rating})
-
-Time from PR creation to first review activity.
-- **Sample Size:** ${metrics.pickup_time.sample_size} PRs
-
-`
+      report += `| **Pickup Time** | ${metrics.pickup_time.average_hours}h | ${emoji} ${metrics.pickup_time.rating} | ${metrics.pickup_time.sample_size} PRs |\n`
     }
 
     // Approve Time
     if (metrics.approve_time.average_hours !== null) {
       const emoji = this.getRatingEmoji(metrics.approve_time.rating)
-      report += `### ${emoji} Approve Time: ${metrics.approve_time.average_hours}h (${metrics.approve_time.rating})
-
-Time from first review activity (or PR creation) to first approval.
-- **Sample Size:** ${metrics.approve_time.sample_size} PRs
-
-`
+      report += `| **Approve Time** | ${metrics.approve_time.average_hours}h | ${emoji} ${metrics.approve_time.rating} | ${metrics.approve_time.sample_size} PRs |\n`
     }
 
     // Merge Time
     if (metrics.merge_time.average_hours !== null) {
       const emoji = this.getRatingEmoji(metrics.merge_time.rating)
-      report += `### ${emoji} Merge Time: ${metrics.merge_time.average_hours}h (${metrics.merge_time.rating})
+      report += `| **Merge Time** | ${metrics.merge_time.average_hours}h | ${emoji} ${metrics.merge_time.rating} | ${metrics.merge_time.sample_size} PRs |\n`
+    }
 
-Time from first approval to merge.
-- **Sample Size:** ${metrics.merge_time.sample_size} PRs
+    report += `
+
+**Metric Definitions:**
+- **Pickup Time:** Time from PR creation to first review activity
+- **Approve Time:** Time from first review activity (or PR creation) to first approval
+- **Merge Time:** Time from first approval to merge
+
+---
+
+## 🚀 Merge Frequency
 
 `
-    }
 
     // Merge Frequency
     const freqEmoji = this.getRatingEmoji(metrics.merge_frequency.rating)
-    report += `---
-
-## ${freqEmoji} Merge Frequency: ${metrics.merge_frequency.value} PRs/dev/week (${metrics.merge_frequency.rating})
-
-- **Merged PRs:** ${metrics.merge_frequency.merged_prs}
-- **Total PRs:** ${metrics.merge_frequency.total_prs}
-- **Unique Authors:** ${metrics.merge_frequency.unique_authors}
+    report += `| Metric | Value | Rating |
+| ------ | ----- | ------ |
+| **Merge Frequency** | ${metrics.merge_frequency.value} PRs/dev/week | ${freqEmoji} ${metrics.merge_frequency.rating} |
+| **Merged PRs** | ${metrics.merge_frequency.merged_prs} | |
+| **Total PRs** | ${metrics.merge_frequency.total_prs} | |
+| **Unique Authors** | ${metrics.merge_frequency.unique_authors} | |
 
 ---
 
@@ -559,14 +688,20 @@ Time from first approval to merge.
 `
 
     const dist = metrics.size_distribution
-    report += `- **Small:** ${dist.small_percent}%
-- **Medium:** ${dist.medium_percent}%
-- **Large:** ${dist.large_percent}%
-- **XL:** ${dist.xl_percent}%
-${dist.unknown_percent > 0 ? `- **Unknown:** ${dist.unknown_percent}%\n` : ''}
+    const predominantEmoji = this.getRatingEmoji(dist.predominant_rating)
+    report += `| Size | Percentage | Rating |
+| ---- | ---------- | ------ |
+| **Small (S)** | ${dist.small_percent}% | ⭐ Elite |
+| **Medium (M)** | ${dist.medium_percent}% | ✅ Good |
+| **Large (L)** | ${dist.large_percent}% | ⚖️ Fair |
+| **Extra Large (XL)** | ${dist.xl_percent}% | 🎯 Needs Focus |
+${dist.unknown_percent > 0 ? `| **Unknown** | ${dist.unknown_percent}% | ❓ Unknown |\n` : ''}
+
+**Predominant Size:** ${predominantEmoji} ${dist.predominant_size.toUpperCase()} (${dist.predominant_percent}%) - ${dist.predominant_rating}
+
 ---
 
-*Report generated on ${new Date(metricsData.timestamp).toLocaleString()}*
+*Report generated on ${new Date(metricsData.timestamp).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}*
 `
 
     return report

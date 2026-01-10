@@ -505,10 +505,12 @@ export class DevExMetricsCollector {
     try {
       const { size, details } = prSizeMetrics
       const sizeEmoji = this.getSizeEmoji(size)
+      const sizeRating = this.getSizeRating(size)
+      const sizeRatingEmoji = this.getRatingEmoji(sizeRating)
 
-      let comment = `## ${sizeEmoji} PR Size: ${size.toUpperCase()}
+      let comment = `## ${sizeEmoji} PR Size: ${size.toUpperCase()} ${sizeRatingEmoji} ${sizeRating}
 
-This pull request has been automatically categorized as **${size}** based on the following metrics:
+This pull request has been automatically categorized as **${size}** with a **${sizeRating}** rating based on the following metrics:
 
 - **Lines added:** ${details.total_additions}
 - **Lines removed:** ${details.total_deletions}
@@ -523,10 +525,11 @@ This pull request has been automatically categorized as **${size}** based on the
         const maturityLevel = this.getMaturityLevel(
           prMaturityMetrics.maturity_percentage
         )
+        const maturityRatingEmoji = this.getRatingEmoji(maturityLevel)
 
         comment += `
 
-## ${maturityEmoji} PR Maturity: ${prMaturityMetrics.maturity_percentage}%
+## ${maturityEmoji} PR Maturity: ${prMaturityMetrics.maturity_percentage}% ${maturityRatingEmoji} ${maturityLevel}
 
 This pull request has a **${maturityLevel}** maturity rating based on code stability:
 
@@ -575,6 +578,36 @@ This pull request has a **${maturityLevel}** maturity rating based on code stabi
       xl: '🔥'
     }
     return emojiMap[size] || '❓'
+  }
+
+  /**
+   * Get size rating based on DevEx categories
+   * @param {string} size - Size category (s, m, l, xl)
+   * @returns {string} Rating
+   */
+  getSizeRating(size) {
+    const ratingMap = {
+      s: 'Elite',
+      m: 'Good',
+      l: 'Fair',
+      xl: 'Needs Focus'
+    }
+    return ratingMap[size] || 'Unknown'
+  }
+
+  /**
+   * Get emoji for rating level
+   * @param {string} rating - Rating level (Elite, Good, Fair, Needs Focus)
+   * @returns {string} Emoji representation
+   */
+  getRatingEmoji(rating) {
+    const emojiMap = {
+      Elite: '⭐',
+      Good: '✅',
+      Fair: '⚖️',
+      'Needs Focus': '🎯'
+    }
+    return emojiMap[rating] || '❓'
   }
 
   /**
