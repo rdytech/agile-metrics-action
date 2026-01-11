@@ -75,7 +75,9 @@ describe('MetricsCollector', () => {
 
       expect(result.source).toBe('release')
       expect(result.latest.tag).toBe('v2.0.0')
-      expect(result.metrics.deploy_frequency_days).toBe(1)
+      // 2 releases over 1 day = 2 / (1/7 weeks) = 14 deploys per week
+      expect(result.metrics.deploy_frequency_days).toBe(14)
+      expect(result.metrics.deploy_count).toBe(2)
       expect(result.metrics.cycle_time.commit_count).toBe(1)
     })
 

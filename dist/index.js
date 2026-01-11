@@ -31845,17 +31845,16 @@ class MetricsCollector {
 
       // Calculate deploy frequency if enabled
       if (this.options.enabledMetrics.deploymentFrequency) {
-        const deployFrequencyDays = this.calculateDeployFrequency(
-          latest,
-          previous
-        );
-        metricsData.deploy_frequency_days = deployFrequencyDays;
+        const deployFrequencyMetrics = await this.calculateDeployFrequency();
+        metricsData.deploy_frequency_days =
+          deployFrequencyMetrics.deploysPerWeek;
+        metricsData.deploy_count = deployFrequencyMetrics.deployCount;
       }
 
-      // Calculate cycle time if enabled
+      // Calculate lead time for changes if enabled
       if (this.options.enabledMetrics.leadTime) {
-        const cycleTimeMetrics = await this.calculateCycleTime(latest, previous);
-        metricsData.cycle_time = cycleTimeMetrics;
+        const leadTimeMetrics = await this.calculateCycleTime(latest, previous);
+        metricsData.cycle_time = leadTimeMetrics;
       }
 
       // Generate complete metrics object
@@ -31890,7 +31889,8 @@ class MetricsCollector {
   }
 
   /**
-   * Determine whether to use releases or tags and get latest/previous
+   * Determine whether to use releases or tags and get latest/previous production deployments
+   * Each release/tag represents a production deployment containing multiple commits
    * @returns {Promise<Object>} Data source information
    */
   async determineDataSource() {
@@ -31943,24 +31943,79 @@ class MetricsCollector {
   }
 
   /**
-   * Calculate deploy frequency between releases/tags
-   * @param {Object} latest - Latest release/tag
-   * @param {Object} previous - Previous release/tag
-   * @returns {number|null} Days between deployments
+   * Calculate deploy frequency - counts production deployments (releases/tags) in the time period
+   * Each release/tag represents a production deployment containing multiple commits
+   * @returns {Promise<Object>} Deploy frequency metrics with count and per-week rate
    */
-  calculateDeployFrequency(latest, previous) {
-    if (!previous?.created_at) {
-      return null
-    }
+  async calculateDeployFrequency() {
+    try {
+      // Get all releases/tags to count deployments in the period
+      const releases = await this.githubClient.listReleases(
+        this.options.maxReleases
+      );
 
-    const days = daysBetween(latest.created_at, previous.created_at);
-    return Number(days.toFixed(3))
+      if (releases.length === 0) {
+        // Fallback to tags if no releases
+        const tags = await this.githubClient.listTags(this.options.maxTags);
+        if (tags.length === 0) {
+          return { deployCount: 0, deploysPerWeek: null }
+        }
+
+        // Calculate time span and normalize to per week
+        if (tags.length === 1) {
+          return { deployCount: 1, deploysPerWeek: null }
+        }
+
+        const oldest = tags[tags.length - 1];
+        const newest = tags[0];
+        const oldestResolved = await this.githubClient.resolveTag(oldest.name);
+        const newestResolved = await this.githubClient.resolveTag(newest.name);
+
+        if (!oldestResolved?.created_at || !newestResolved?.created_at) {
+          return { deployCount: tags.length, deploysPerWeek: null }
+        }
+
+        const days = daysBetween(
+          newestResolved.created_at,
+          oldestResolved.created_at
+        );
+        const weeks = days / 7;
+        const deploysPerWeek =
+          weeks > 0 ? Number((tags.length / weeks).toFixed(2)) : null;
+
+        return { deployCount: tags.length, deploysPerWeek }
+      }
+
+      // Use releases
+      if (releases.length === 1) {
+        return { deployCount: 1, deploysPerWeek: null }
+      }
+
+      const oldest = releases[releases.length - 1];
+      const newest = releases[0];
+      const days = daysBetween(newest.created_at, oldest.created_at);
+      const weeks = days / 7;
+      const deploysPerWeek =
+        weeks > 0 ? Number((releases.length / weeks).toFixed(2)) : null;
+
+      return { deployCount: releases.length, deploysPerWeek }
+    } catch (error) {
+      coreExports.error(`Failed to calculate deploy frequency: ${error.message}`);
+      return { deployCount: 0, deploysPerWeek: null }
+    }
   }
 
   /**
-   * Calculate cycle time metrics
-   * @param {Object} latest - Latest release/tag
-   * @param {Object} previous - Previous release/tag
+   * Calculate cycle time
+   * The time it takes for a single engineering task to go through the different
+   * phases of the delivery process from 'code' to 'production'
+   *
+   * Measures time from individual commit authoring to the production deployment (release/tag)
+   * that includes that commit. A production deployment (release/tag) typically contains
+   * multiple commits, and each commit's cycle time is calculated independently.
+   *
+   * @param {Object} latest - Latest production deployment (release/tag)
+   * @param {Object} previous - Previous production deployment (release/tag)
    * @returns {Promise<Object>} Cycle time metrics
    */
   async calculateCycleTime(latest, previous) {
@@ -31968,7 +32023,8 @@ class MetricsCollector {
     let commitDates = [];
 
     if (previous?.sha) {
-      // Compare commits between previous and latest
+      // Compare all commits included in the latest production deployment
+      // (between previous release/tag and latest release/tag)
       const comparison = await this.githubClient.compareCommits(
         previous.sha,
         latest.sha
@@ -33304,7 +33360,7 @@ class TeamMetricsCollector {
             doraMetrics.cycle_time.avg_hours
           );
           const cycleTimeEmoji = this.getRatingEmoji(cycleTimeRating);
-          report += `### ${cycleTimeEmoji} Cycle Time — **${doraMetrics.cycle_time.avg_hours}h** (*${cycleTimeRating}*)\n**Definition:** Time from PR creation to PR merge (end-to-end)<br>\n**Sample size:** ${doraMetrics.cycle_time.commit_count || 0} PRs\n\n`;
+          report += `### ${cycleTimeEmoji} Cycle Time — **${doraMetrics.cycle_time.avg_hours}h** (*${cycleTimeRating}*)\n**Definition:** Time from code commit to production deployment<br>\n**Sample size:** ${doraMetrics.cycle_time.commit_count || 0} commits\n\n`;
         }
 
         if (hasDeployFreq) {

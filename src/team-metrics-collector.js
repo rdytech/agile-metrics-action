@@ -611,7 +611,7 @@ export class TeamMetricsCollector {
             doraMetrics.cycle_time.avg_hours
           )
           const cycleTimeEmoji = this.getRatingEmoji(cycleTimeRating)
-          report += `### ${cycleTimeEmoji} Cycle Time — **${doraMetrics.cycle_time.avg_hours}h** (*${cycleTimeRating}*)\n**Definition:** Time from PR creation to PR merge (end-to-end)<br>\n**Sample size:** ${doraMetrics.cycle_time.commit_count || 0} PRs\n\n`
+          report += `### ${cycleTimeEmoji} Cycle Time — **${doraMetrics.cycle_time.avg_hours}h** (*${cycleTimeRating}*)\n**Definition:** Time from code commit to production deployment<br>\n**Sample size:** ${doraMetrics.cycle_time.commit_count || 0} commits\n\n`
         }
 
         if (hasDeployFreq) {
