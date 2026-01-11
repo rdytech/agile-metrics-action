@@ -53,8 +53,8 @@ describe('OutputManager', () => {
         latest: { tag: 'v1.0.0', created_at: '2023-01-01T00:00:00Z' },
         metrics: {
           dora: {
-            deployment_frequency_days: 7,
-            lead_time_for_change: {
+            deploy_frequency_days: 7,
+            cycle_time: {
               commit_count: 5,
               avg_hours: 24,
               oldest_hours: 48,
@@ -155,8 +155,8 @@ describe('OutputManager', () => {
       const mockMetrics = {
         metrics: {
           dora: {
-            deployment_frequency_days: 5.5,
-            lead_time_for_change: {
+            deploy_frequency_days: 5.5,
+            cycle_time: {
               commit_count: 3,
               avg_hours: 18.5,
               oldest_hours: 36,

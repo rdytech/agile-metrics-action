@@ -42,22 +42,19 @@ export class MetricsCollector {
 
       const metricsData = {}
 
-      // Calculate deployment frequency if enabled
+      // Calculate deploy frequency if enabled
       if (this.options.enabledMetrics.deploymentFrequency) {
-        const deploymentFrequencyDays = this.calculateDeploymentFrequency(
+        const deployFrequencyDays = this.calculateDeployFrequency(
           latest,
           previous
         )
-        metricsData.deployment_frequency_days = deploymentFrequencyDays
+        metricsData.deploy_frequency_days = deployFrequencyDays
       }
 
-      // Calculate lead time for change if enabled
+      // Calculate cycle time if enabled
       if (this.options.enabledMetrics.leadTime) {
-        const leadTimeMetrics = await this.calculateLeadTimeForChange(
-          latest,
-          previous
-        )
-        metricsData.lead_time_for_change = leadTimeMetrics
+        const cycleTimeMetrics = await this.calculateCycleTime(latest, previous)
+        metricsData.cycle_time = cycleTimeMetrics
       }
 
       // Generate complete metrics object
@@ -145,12 +142,12 @@ export class MetricsCollector {
   }
 
   /**
-   * Calculate deployment frequency between releases/tags
+   * Calculate deploy frequency between releases/tags
    * @param {Object} latest - Latest release/tag
    * @param {Object} previous - Previous release/tag
    * @returns {number|null} Days between deployments
    */
-  calculateDeploymentFrequency(latest, previous) {
+  calculateDeployFrequency(latest, previous) {
     if (!previous?.created_at) {
       return null
     }
@@ -160,12 +157,12 @@ export class MetricsCollector {
   }
 
   /**
-   * Calculate lead time for change metrics
+   * Calculate cycle time metrics
    * @param {Object} latest - Latest release/tag
    * @param {Object} previous - Previous release/tag
-   * @returns {Promise<Object>} Lead time metrics
+   * @returns {Promise<Object>} Cycle time metrics
    */
-  async calculateLeadTimeForChange(latest, previous) {
+  async calculateCycleTime(latest, previous) {
     let allCommits = []
     let commitDates = []
 

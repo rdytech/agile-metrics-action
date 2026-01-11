@@ -4,16 +4,16 @@
 
 This document outlines the design for converting the delivery metrics collection
 workflow from `metrics.yml` into a reusable GitHub Action. The action will
-collect key agile/DevOps metrics including Deployment Frequency and Lead Time
-for Change from GitHub repositories.
+collect key agile/DevOps metrics including Deploy Frequency and Cycle Time from
+GitHub repositories.
 
 ## Current State Analysis
 
 The existing workflow in `metrics.yml` contains a comprehensive JavaScript
 script that:
 
-- Analyzes GitHub releases and tags to determine deployment frequency
-- Calculates lead time for change by examining commits between releases
+- Analyzes GitHub releases and tags to determine deploy frequency
+- Calculates cycle time by examining commits between releases
 - Generates detailed metrics in JSON format
 - Creates a markdown summary
 - Commits results back to the repository
@@ -25,8 +25,7 @@ script that:
 ```yaml
 name: 'Agile Metrics Collector'
 description:
-  'Collect deployment frequency and lead time for change metrics from GitHub
-  repositories'
+  'Collect deploy frequency and cycle time metrics from GitHub repositories'
 author: 'xavius-rb'
 
 branding:
@@ -50,7 +49,7 @@ inputs:
     default: 'true'
 
   include-merge-commits:
-    description: 'Whether to include merge commits in lead time calculations'
+    description: 'Whether to include merge commits in cycle time calculations'
     required: false
     default: 'false'
 
@@ -72,13 +71,13 @@ outputs:
     description: 'Days between latest and previous deployment'
 
   lead-time-avg:
-    description: 'Average lead time for change in hours'
+    description: 'Average cycle time in hours'
 
   lead-time-oldest:
-    description: 'Oldest commit lead time in hours'
+    description: 'Oldest commit cycle time in hours'
 
   lead-time-newest:
-    description: 'Newest commit lead time in hours'
+    description: 'Newest commit cycle time in hours'
 
   commit-count:
     description: 'Number of commits analyzed'
@@ -105,8 +104,8 @@ runs:
 Main class responsible for:
 
 - Repository analysis (releases vs tags)
-- Deployment frequency calculation
-- Lead time for change calculation
+- Deploy frequency calculation
+- Cycle time calculation
 - Data aggregation and formatting
 
 #### `src/github-client.js` - GitHub API Wrapper
@@ -144,14 +143,14 @@ Helper functions for:
 
 #### 2. Comprehensive Metrics Calculation
 
-**Deployment Frequency:**
+**Deploy Frequency:**
 
 - Time between consecutive releases/tags
 - Configurable to use different date sources (creation vs commit time)
 
-**Lead Time for Change:**
+**Cycle Time:**
 
-- Average, oldest, and newest commit lead times
+- Average, oldest, and newest commit cycle times
 - Exclude merge commits from "newest" calculation (configurable)
 - Detailed commit analysis with SHA references
 
@@ -180,8 +179,8 @@ Helper functions for:
 #### Phase 2: Metrics Collection
 
 1. Implement release/tag detection and prioritization
-1. Build deployment frequency calculation
-1. Develop lead time for change logic
+1. Build deploy frequency calculation
+1. Develop cycle time logic
 1. Add commit analysis with merge detection
 
 #### Phase 3: Output Generation
@@ -231,9 +230,9 @@ Helper functions for:
 
 - name: Upload to Analytics
   run: |
-    echo "Deployment frequency: \
+    echo "Deploy frequency: \
       ${{ steps.metrics.outputs.deployment-frequency }} days"
-    echo "Average lead time: ${{ steps.metrics.outputs.lead-time-avg }} hours"
+    echo "Average cycle time: ${{ steps.metrics.outputs.lead-time-avg }} hours"
     curl -X POST $ANALYTICS_URL \
       -d '${{ steps.metrics.outputs.metrics-json }}'
 ```
