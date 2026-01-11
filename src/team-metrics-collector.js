@@ -568,7 +568,7 @@ export class TeamMetricsCollector {
    */
   generateMarkdownReport(metricsData) {
     if (metricsData.error) {
-      return `# 📊 Team Metrics Report
+      return `# 📊 Engineering Metrics Report
 
 | **Period** | ${metricsData.period} |
 | ---------- | --------------------- |
@@ -583,105 +583,72 @@ export class TeamMetricsCollector {
     const startDate = this.formatDate(date_range.start)
     const endDate = this.formatDate(date_range.end)
 
-    let report = `# 📊 Team Metrics Report
+    let report = `# 📊 Engineering Metrics Report
 
-| **Period**        | ${period.charAt(0).toUpperCase() + period.slice(1)} |
-| ----------------- | --------------------------------------------------- |
-| **Date Range**    | ${startDate} → ${endDate}                           |
-| **Total PRs**     | ${total_prs}                                        |
-| **Unique Authors**| ${unique_authors}                                   |
+> **Period:** ${period.charAt(0).toUpperCase() + period.slice(1)}<br>
+> **Date range:** ${startDate} → ${endDate}<br>
+> **Total PRs:** ${total_prs} &nbsp;|&nbsp; **Unique authors:** ${unique_authors}
 
 ---
 
-## 🚀 DORA Metrics
-
 `
 
-    // Add Deploy Frequency and Cycle Time if available
+    // Add Delivery Metrics (DORA metrics) if available
     if (metricsData.dora_metrics) {
       const doraMetrics = metricsData.dora_metrics
-
-      report += `| Metric | Value | Rating | Details |\n`
-      report += `| ------ | ----- | ------ | ------- |\n`
-
-      if (
-        doraMetrics.deploy_frequency_days !== undefined &&
-        doraMetrics.deploy_frequency_days !== null
-      ) {
-        const deployFreqRating = this.rateDeployFrequency(
-          doraMetrics.deploy_frequency_days
-        )
-        const deployFreqEmoji = this.getRatingEmoji(deployFreqRating)
-        report += `| **Deploy Frequency** | ${doraMetrics.deploy_frequency_days} days | ${deployFreqEmoji} ${deployFreqRating} | Days between deployments to production |\n`
-      }
-
-      if (
+      const hasCycleTime =
         doraMetrics.cycle_time?.avg_hours !== undefined &&
         doraMetrics.cycle_time?.avg_hours !== null
-      ) {
-        const cycleTimeRating = this.rateCycleTime(
-          doraMetrics.cycle_time.avg_hours
-        )
-        const cycleTimeEmoji = this.getRatingEmoji(cycleTimeRating)
-        report += `| **Cycle Time** | ${doraMetrics.cycle_time.avg_hours}h | ${cycleTimeEmoji} ${cycleTimeRating} | Avg. time from commit to deployment (${doraMetrics.cycle_time.commit_count || 0} commits) |\n`
-      }
+      const hasDeployFreq =
+        doraMetrics.deploy_frequency_days !== undefined &&
+        doraMetrics.deploy_frequency_days !== null
 
-      report += `\n---\n\n`
+      if (hasCycleTime || hasDeployFreq) {
+        report += `## 🚀 Delivery Metrics\n\n`
+
+        if (hasCycleTime) {
+          const cycleTimeRating = this.rateCycleTime(
+            doraMetrics.cycle_time.avg_hours
+          )
+          const cycleTimeEmoji = this.getRatingEmoji(cycleTimeRating)
+          report += `### ${cycleTimeEmoji} Cycle Time — **${doraMetrics.cycle_time.avg_hours}h** (*${cycleTimeRating}*)\n**Definition:** Time from PR creation to PR merge (end-to-end)<br>\n**Sample size:** ${doraMetrics.cycle_time.commit_count || 0} PRs\n\n`
+        }
+
+        if (hasDeployFreq) {
+          const deployFreqRating = this.rateDeployFrequency(
+            doraMetrics.deploy_frequency_days
+          )
+          const deployFreqEmoji = this.getRatingEmoji(deployFreqRating)
+          report += `### ${deployFreqEmoji} Deploy Frequency — **${doraMetrics.deploy_frequency_days}** (*${deployFreqRating}*)\n**Definition:** Number of production deployments in the period (normalized to per week)<br>\n**Sample size:** ${doraMetrics.deploy_count || 0} deployments\n\n`
+        }
+
+        report += `---\n\n`
+      }
     }
 
-    report += `## ⏱️ Review Time Metrics
-
-| Metric | Average | Rating | Sample Size |
-| ------ | ------- | ------ | ----------- |
-`
-
-    report += `## ⏱️ Review Time Metrics
-
-| Metric | Average | Rating | Sample Size |
-| ------ | ------- | ------ | ----------- |
-`
+    report += `## 📊 Review Time Metrics\n\n`
 
     // Pickup Time
     if (metrics.pickup_time.average_hours !== null) {
       const emoji = this.getRatingEmoji(metrics.pickup_time.rating)
-      report += `| **Pickup Time** | ${metrics.pickup_time.average_hours}h | ${emoji} ${metrics.pickup_time.rating} | ${metrics.pickup_time.sample_size} PRs |\n`
+      report += `### ${emoji} Pickup Time — **${metrics.pickup_time.average_hours}h** (*${metrics.pickup_time.rating}*)\n**Definition:** Time from PR creation to first review activity<br>\n**Sample size:** ${metrics.pickup_time.sample_size} PRs\n\n`
     }
 
     // Approve Time
     if (metrics.approve_time.average_hours !== null) {
       const emoji = this.getRatingEmoji(metrics.approve_time.rating)
-      report += `| **Approve Time** | ${metrics.approve_time.average_hours}h | ${emoji} ${metrics.approve_time.rating} | ${metrics.approve_time.sample_size} PRs |\n`
+      report += `### ${emoji} Approve Time — **${metrics.approve_time.average_hours}h** (*${metrics.approve_time.rating}*)\n**Definition:** Time from first review activity (or PR creation) to first approval<br>\n**Sample size:** ${metrics.approve_time.sample_size} PRs\n\n`
     }
 
     // Merge Time
     if (metrics.merge_time.average_hours !== null) {
       const emoji = this.getRatingEmoji(metrics.merge_time.rating)
-      report += `| **Merge Time** | ${metrics.merge_time.average_hours}h | ${emoji} ${metrics.merge_time.rating} | ${metrics.merge_time.sample_size} PRs |\n`
+      report += `### ${emoji} Merge Time — **${metrics.merge_time.average_hours}h** (*${metrics.merge_time.rating}*)\n**Definition:** Time from first approval to merge<br>\n**Sample size:** ${metrics.merge_time.sample_size} PRs\n\n`
     }
-
-    report += `
-
-**Metric Definitions:**
-- **Pickup Time:** Time from PR creation to first review activity
-- **Approve Time:** Time from first review activity (or PR creation) to first approval
-- **Merge Time:** Time from first approval to merge
-
----
-
-## 🚀 Merge Frequency
-
-`
 
     // Merge Frequency
     const freqEmoji = this.getRatingEmoji(metrics.merge_frequency.rating)
-    report += `| Metric | Value | Rating |
-| ------ | ----- | ------ |
-| **Merge Frequency** | ${metrics.merge_frequency.value} PRs/dev/week | ${freqEmoji} ${metrics.merge_frequency.rating} |
-| **Merged PRs** | ${metrics.merge_frequency.merged_prs} | |
-| **Total PRs** | ${metrics.merge_frequency.total_prs} | |
-| **Unique Authors** | ${metrics.merge_frequency.unique_authors} | |
-
----
+    report += `### ${freqEmoji} Merge Frequency — **${metrics.merge_frequency.value} PRs/dev/week** (*${metrics.merge_frequency.rating}*)\n\n| Metric | Value |\n|---|---:|\n| Merged PRs | ${metrics.merge_frequency.merged_prs} |\n| Total PRs | ${metrics.merge_frequency.total_prs} |\n| Unique authors | ${metrics.merge_frequency.unique_authors} |\n\n---
 
 ## 📏 PR Size Distribution
 
