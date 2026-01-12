@@ -31594,6 +31594,57 @@ class GitHubClient {
   }
 
   /**
+   * Get releases by date range
+   * @param {string} since - Start date (ISO 8601 format)
+   * @param {string} until - End date (ISO 8601 format)
+   * @returns {Promise<Array>} Array of releases
+   */
+  async getReleasesByDateRange(since, until) {
+    try {
+      const allReleases = [];
+      let page = 1;
+      const perPage = 100;
+
+      while (true) {
+        const response = await this.octokit.request(
+          'GET /repos/{owner}/{repo}/releases',
+          {
+            owner: this.owner,
+            repo: this.repo,
+            per_page: perPage,
+            page
+          }
+        );
+
+        if (response.data.length === 0) break
+
+        // Filter releases by date range (exclude drafts)
+        const filteredReleases = response.data.filter((release) => {
+          if (release.draft) return false
+          const createdAt = new Date(release.created_at);
+          const sinceDate = new Date(since);
+          const untilDate = new Date(until);
+          return createdAt >= sinceDate && createdAt <= untilDate
+        });
+
+        allReleases.push(...filteredReleases);
+
+        // If we've gone past the date range, stop
+        const oldestRelease = response.data[response.data.length - 1];
+        if (new Date(oldestRelease.created_at) < new Date(since)) break
+
+        if (response.data.length < perPage) break
+        page++;
+      }
+
+      return allReleases
+    } catch (error) {
+      coreExports.warning(`Failed to fetch releases by date range: ${error.message}`);
+      return []
+    }
+  }
+
+  /**
    * Get pull requests by date range
    * @param {string} since - Start date (ISO 8601 format)
    * @param {string} until - End date (ISO 8601 format)
@@ -32795,6 +32846,147 @@ class TeamMetricsCollector {
   }
 
   /**
+   * Calculate cycle time for releases in the time period
+   * @param {Object} dateRange - Date range object with start and end
+   * @returns {Promise<Object>} Cycle time metrics
+   */
+  async calculateCycleTime(dateRange) {
+    try {
+      // Get releases within the date range
+      const releases = await this.githubClient.getReleasesByDateRange(
+        dateRange.start,
+        dateRange.end
+      );
+
+      if (releases.length === 0) {
+        return {
+          cycle_time: {
+            avg_hours: null,
+            commit_count: 0
+          }
+        }
+      }
+
+      const allCycleTimes = [];
+      let totalCommitCount = 0;
+
+      // For each release, calculate cycle times for its commits
+      for (const release of releases) {
+        const releaseCreatedAt = new Date(release.created_at);
+
+        // Resolve the release tag to get SHA
+        const tagData = await this.githubClient.resolveTag(release.tag_name);
+        if (!tagData?.sha) continue
+
+        // Get commits for this release
+        // We need to find the previous release/tag to compare
+        const allReleases = await this.githubClient.listReleases(100);
+        const releaseIndex = allReleases.findIndex(
+          (r) => r.tag_name === release.tag_name
+        );
+        const previousRelease =
+          releaseIndex >= 0 && releaseIndex < allReleases.length - 1
+            ? allReleases[releaseIndex + 1]
+            : null;
+
+        let commits = [];
+        if (previousRelease) {
+          const prevTagData = await this.githubClient.resolveTag(
+            previousRelease.tag_name
+          );
+          if (prevTagData?.sha) {
+            const comparison = await this.githubClient.compareCommits(
+              prevTagData.sha,
+              tagData.sha
+            );
+            commits = comparison.commits || [];
+          }
+        } else {
+          // First release - just get the single commit
+          const commit = await this.githubClient.getCommit(tagData.sha);
+          if (commit) commits = [commit];
+        }
+
+        // Calculate cycle time for each commit
+        for (const commit of commits) {
+          const commitDate =
+            commit.commit?.committer?.date || commit.commit?.author?.date;
+          if (!commitDate) continue
+
+          const commitTime = new Date(commitDate);
+          const ageHours = (releaseCreatedAt - commitTime) / (1000 * 60 * 60);
+
+          if (ageHours >= 0) {
+            allCycleTimes.push(ageHours);
+            totalCommitCount++;
+          }
+        }
+      }
+
+      // Calculate average
+      const avgCycleTime =
+        allCycleTimes.length > 0
+          ? Math.round(
+              (allCycleTimes.reduce((a, b) => a + b, 0) /
+                allCycleTimes.length) *
+                100
+            ) / 100
+          : null;
+
+      return {
+        cycle_time: {
+          avg_hours: avgCycleTime,
+          commit_count: totalCommitCount
+        }
+      }
+    } catch (error) {
+      coreExports.warning(`Failed to calculate cycle time: ${error.message}`);
+      return {
+        cycle_time: {
+          avg_hours: null,
+          commit_count: 0
+        }
+      }
+    }
+  }
+
+  /**
+   * Calculate deploy frequency for the time period
+   * @param {Object} dateRange - Date range object with start and end
+   * @returns {Promise<Object>} Deploy frequency metrics
+   */
+  async calculateDeployFrequency(dateRange) {
+    try {
+      // Get releases within the date range
+      const releases = await this.githubClient.getReleasesByDateRange(
+        dateRange.start,
+        dateRange.end
+      );
+
+      const releaseCount = releases.length;
+      const daysInPeriod = this.getDaysInPeriod();
+      const weeksInPeriod = daysInPeriod / 7;
+
+      // Calculate releases per week
+      const releasesPerWeek =
+        weeksInPeriod > 0
+          ? Math.round((releaseCount / weeksInPeriod) * 100) / 100
+          : null;
+
+      return {
+        deploy_frequency_days: releasesPerWeek,
+        deploy_count: releaseCount
+      }
+    } catch (error) {
+      coreExports.warning(`Failed to calculate deploy frequency: ${error.message}`);
+      return {
+        deploy_frequency_days: null,
+        deploy_count: 0
+      }
+    }
+  }
+
+  /**
    * Collect team metrics for the specified time period
    * @returns {Promise<Object>} Team metrics data
    */
@@ -32825,6 +33017,13 @@ class TeamMetricsCollector {
 
       coreExports.info(`Found ${prs.length} PRs in the time period`);
 
+      // Calculate DORA metrics for the time period
+      coreExports.info('Calculating DORA metrics (cycle time and deploy frequency)...');
+      const [cycleTimeMetrics, deployFreqMetrics] = await Promise.all([
+        this.calculateCycleTime(dateRange),
+        this.calculateDeployFrequency(dateRange)
+      ]);
+
       // Calculate metrics for each PR
       const prMetrics = [];
       for (const pr of prs) {
@@ -32844,6 +33043,10 @@ class TeamMetricsCollector {
         analyzed_prs: prMetrics.length,
         unique_authors: this.countUniqueAuthors(prs),
         metrics: stats,
+        dora_metrics: {
+          ...cycleTimeMetrics.cycle_time,
+          ...deployFreqMetrics
+        },
         timestamp: new Date().toISOString()
       }
     } catch (error) {
@@ -32917,17 +33120,18 @@ class TeamMetricsCollector {
    * @returns {number|null} Pickup time in hours
    */
   calculatePickupTime(createdAt, timeline, reviews) {
-    // Find first review comment or review
+    // Find first review comment (exclude bot activity)
     const firstReviewComment = timeline?.find(
       (event) =>
-        event.event === 'reviewed' ||
-        event.event === 'commented' ||
-        (event.event === 'line-commented' && event.user?.type !== 'Bot')
+        (event.event === 'reviewed' ||
+          event.event === 'commented' ||
+          event.event === 'line-commented') &&
+        event.user?.type !== 'Bot'
     );
 
-    // Find first review (sorted by submission time to ensure chronological order)
+    // Find first review from a human (sorted by submission time to ensure chronological order)
     const sortedReviews = reviews
-      ?.filter((r) => r.submitted_at) // Ensure reviews have submission time
+      ?.filter((r) => r.submitted_at && r.user?.type !== 'Bot') // Exclude bot reviews
       .sort(
         (a, b) =>
           new Date(a.submitted_at).getTime() -
@@ -32952,7 +33156,14 @@ class TeamMetricsCollector {
     }
 
     const diffMs = firstActivityTime - createdAt;
-    return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100 // Round to 2 decimals
+    const hours = diffMs / (1000 * 60 * 60);
+
+    // Return null if negative (shouldn't happen but safety check)
+    if (hours < 0) {
+      return null
+    }
+
+    return Math.round(hours * 100) / 100 // Round to 2 decimals
   }
 
   /**
@@ -33298,19 +33509,6 @@ class TeamMetricsCollector {
   }
 
   /**
-   * Format date to readable string (e.g., "9 Dec 2025")
-   * @param {string} dateString - ISO date string
-   * @returns {string} Formatted date
-   */
-  formatDate(dateString) {
-    const date = new Date(dateString);
-    const day = date.getDate();
-    const month = date.toLocaleString('en-US', { month: 'short' });
-    const year = date.getFullYear();
-    return `${day} ${month} ${year}`
-  }
-
-  /**
    * Generate markdown report
    * @param {Object} metricsData - Team metrics data
    * @returns {string} Markdown report
@@ -33329,13 +33527,13 @@ class TeamMetricsCollector {
     const { metrics, period, date_range, total_prs, unique_authors } =
       metricsData;
 
-    const startDate = this.formatDate(date_range.start);
-    const endDate = this.formatDate(date_range.end);
+    const startDate = date_range.start.split('T')[0];
+    const endDate = date_range.end.split('T')[0];
 
     let report = `# 📊 Engineering Metrics Report
 
-> **Period:** ${period.charAt(0).toUpperCase() + period.slice(1)}<br>
-> **Date range:** ${startDate} → ${endDate}<br>
+> **Period:** ${period.charAt(0).toUpperCase() + period.slice(1)}
+> **Date range:** ${startDate} → ${endDate}
 > **Total PRs:** ${total_prs} &nbsp;|&nbsp; **Unique authors:** ${unique_authors}
 
 ---
@@ -33360,7 +33558,7 @@ class TeamMetricsCollector {
             doraMetrics.cycle_time.avg_hours
           );
           const cycleTimeEmoji = this.getRatingEmoji(cycleTimeRating);
-          report += `### ${cycleTimeEmoji} Cycle Time — **${doraMetrics.cycle_time.avg_hours}h** (*${cycleTimeRating}*)\n**Definition:** Time from code commit to production deployment<br>\n**Sample size:** ${doraMetrics.cycle_time.commit_count || 0} commits\n\n`;
+          report += `### ${cycleTimeEmoji} Cycle Time — **${doraMetrics.cycle_time.avg_hours}h** (*${cycleTimeRating}*)\n**Definition:** Time from code commit to release<br>\n**Sample size:** ${doraMetrics.cycle_time.commit_count || 0} commits\n\n`;
         }
 
         if (hasDeployFreq) {
@@ -33368,7 +33566,7 @@ class TeamMetricsCollector {
             doraMetrics.deploy_frequency_days
           );
           const deployFreqEmoji = this.getRatingEmoji(deployFreqRating);
-          report += `### ${deployFreqEmoji} Deploy Frequency — **${doraMetrics.deploy_frequency_days}** (*${deployFreqRating}*)\n**Definition:** Number of production deployments in the period (normalized to per week)<br>\n**Sample size:** ${doraMetrics.deploy_count || 0} deployments\n\n`;
+          report += `### ${deployFreqEmoji} Deploy Frequency — **${doraMetrics.deploy_frequency_days}** (*${deployFreqRating}*)\n**Definition:** Number of releases in the period (normalized to per week)<br>\n**Sample size:** ${doraMetrics.deploy_count || 0} deployments\n\n`;
         }
 
         report += `---\n\n`;
@@ -34009,29 +34207,12 @@ async function runTeamMetrics(
 
     const githubClient = new GitHubClient(githubToken, owner, repo);
 
-    // Collect DORA metrics (deploy frequency and cycle time)
-    const metricsCollector = new MetricsCollector(githubClient, {
-      includeMergeCommits: false,
-      maxReleases: 100,
-      maxTags: 100,
-      enabledMetrics: {
-        deploymentFrequency: true,
-        leadTime: true
-      }
-    });
-    const doraMetrics = await metricsCollector.collectMetrics();
-
     const teamMetricsCollector = new TeamMetricsCollector(githubClient, {
       timePeriod
     });
 
-    // Collect team metrics
+    // Collect team metrics (includes DORA metrics for the period)
     const metricsData = await teamMetricsCollector.collectMetrics();
-
-    // Add DORA metrics to team metrics
-    if (doraMetrics && doraMetrics.metrics) {
-      metricsData.dora_metrics = doraMetrics.metrics;
-    }
 
     // Generate markdown report
     const markdownReport =

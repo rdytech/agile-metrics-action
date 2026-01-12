@@ -81,15 +81,18 @@ class TestTeamMetricsCollector {
   }
 
   calculatePickupTime(createdAt, timeline, reviews) {
+    // Find first review comment (exclude bot activity)
     const firstReviewComment = timeline?.find(
       (event) =>
-        event.event === 'reviewed' ||
-        event.event === 'commented' ||
-        (event.event === 'line-commented' && event.user?.type !== 'Bot')
+        (event.event === 'reviewed' ||
+          event.event === 'commented' ||
+          event.event === 'line-commented') &&
+        event.user?.type !== 'Bot'
     )
 
+    // Find first review from a human (sorted by submission time to ensure chronological order)
     const sortedReviews = reviews
-      ?.filter((r) => r.submitted_at)
+      ?.filter((r) => r.submitted_at && r.user?.type !== 'Bot') // Exclude bot reviews
       .sort(
         (a, b) =>
           new Date(a.submitted_at).getTime() -
@@ -112,7 +115,14 @@ class TestTeamMetricsCollector {
     if (!firstActivityTime) return null
 
     const diffMs = firstActivityTime - createdAt
-    return Math.round((diffMs / (1000 * 60 * 60)) * 100) / 100
+    const hours = diffMs / (1000 * 60 * 60)
+
+    // Return null if negative (shouldn't happen but safety check)
+    if (hours < 0) {
+      return null
+    }
+
+    return Math.round(hours * 100) / 100 // Round to 2 decimals
   }
 
   calculateApproveTime(createdAt, timeline, reviews) {
@@ -360,6 +370,40 @@ describe('TeamMetricsCollector', () => {
         reviews
       )
       expect(pickupTime).toBe(null)
+    })
+
+    it('should filter out bot reviews and comments', () => {
+      const createdAt = new Date('2024-01-01T10:00:00Z')
+      const timeline = [
+        {
+          event: 'commented',
+          created_at: '2024-01-01T11:00:00Z',
+          user: { type: 'Bot' }
+        },
+        {
+          event: 'commented',
+          created_at: '2024-01-01T13:00:00Z',
+          user: { type: 'User' }
+        }
+      ]
+      const reviews = [
+        {
+          submitted_at: '2024-01-01T11:30:00Z',
+          user: { type: 'Bot' }
+        },
+        {
+          submitted_at: '2024-01-01T14:00:00Z',
+          user: { type: 'User' }
+        }
+      ]
+
+      const pickupTime = collector.calculatePickupTime(
+        createdAt,
+        timeline,
+        reviews
+      )
+      // Should use first human comment at 13:00, not bot comment at 11:00
+      expect(pickupTime).toBe(3)
     })
   })
 
