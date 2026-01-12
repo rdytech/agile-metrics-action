@@ -98,6 +98,83 @@ describe('GitHubClient', () => {
     })
   })
 
+  describe('getReleasesByDateRange', () => {
+    it('should return releases within date range', async () => {
+      const mockReleases = [
+        {
+          name: 'v3.0.0',
+          tag_name: 'v3.0.0',
+          created_at: '2024-01-15T00:00:00Z',
+          draft: false
+        },
+        {
+          name: 'v2.0.0',
+          tag_name: 'v2.0.0',
+          created_at: '2024-01-05T00:00:00Z',
+          draft: false
+        },
+        {
+          name: 'v1.0.0',
+          tag_name: 'v1.0.0',
+          created_at: '2023-12-20T00:00:00Z',
+          draft: false
+        }
+      ]
+
+      mockOctokit.request.mockResolvedValue({ data: mockReleases })
+
+      const result = await client.getReleasesByDateRange(
+        '2024-01-01T00:00:00Z',
+        '2024-01-20T00:00:00Z'
+      )
+
+      expect(result).toHaveLength(2)
+      expect(result[0].tag_name).toBe('v3.0.0')
+      expect(result[1].tag_name).toBe('v2.0.0')
+    })
+
+    it('should filter out draft releases', async () => {
+      const mockReleases = [
+        {
+          name: 'v2.0.0',
+          tag_name: 'v2.0.0',
+          created_at: '2024-01-05T00:00:00Z',
+          draft: false
+        },
+        {
+          name: 'v2.0.0-draft',
+          tag_name: 'v2.0.0-draft',
+          created_at: '2024-01-06T00:00:00Z',
+          draft: true
+        }
+      ]
+
+      mockOctokit.request.mockResolvedValue({ data: mockReleases })
+
+      const result = await client.getReleasesByDateRange(
+        '2024-01-01T00:00:00Z',
+        '2024-01-20T00:00:00Z'
+      )
+
+      expect(result).toHaveLength(1)
+      expect(result[0].draft).toBe(false)
+    })
+
+    it('should handle API errors gracefully', async () => {
+      mockOctokit.request.mockRejectedValue(new Error('API Error'))
+
+      const result = await client.getReleasesByDateRange(
+        '2024-01-01T00:00:00Z',
+        '2024-01-20T00:00:00Z'
+      )
+
+      expect(result).toEqual([])
+      expect(mockCore.warning).toHaveBeenCalledWith(
+        'Failed to fetch releases by date range: API Error'
+      )
+    })
+  })
+
   describe('resolveTag', () => {
     it('should resolve annotated tag', async () => {
       const mockRefResponse = {

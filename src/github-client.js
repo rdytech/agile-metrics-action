@@ -337,6 +337,57 @@ export class GitHubClient {
   }
 
   /**
+   * Get releases by date range
+   * @param {string} since - Start date (ISO 8601 format)
+   * @param {string} until - End date (ISO 8601 format)
+   * @returns {Promise<Array>} Array of releases
+   */
+  async getReleasesByDateRange(since, until) {
+    try {
+      const allReleases = []
+      let page = 1
+      const perPage = 100
+
+      while (true) {
+        const response = await this.octokit.request(
+          'GET /repos/{owner}/{repo}/releases',
+          {
+            owner: this.owner,
+            repo: this.repo,
+            per_page: perPage,
+            page
+          }
+        )
+
+        if (response.data.length === 0) break
+
+        // Filter releases by date range (exclude drafts)
+        const filteredReleases = response.data.filter((release) => {
+          if (release.draft) return false
+          const createdAt = new Date(release.created_at)
+          const sinceDate = new Date(since)
+          const untilDate = new Date(until)
+          return createdAt >= sinceDate && createdAt <= untilDate
+        })
+
+        allReleases.push(...filteredReleases)
+
+        // If we've gone past the date range, stop
+        const oldestRelease = response.data[response.data.length - 1]
+        if (new Date(oldestRelease.created_at) < new Date(since)) break
+
+        if (response.data.length < perPage) break
+        page++
+      }
+
+      return allReleases
+    } catch (error) {
+      core.warning(`Failed to fetch releases by date range: ${error.message}`)
+      return []
+    }
+  }
+
+  /**
    * Get pull requests by date range
    * @param {string} since - Start date (ISO 8601 format)
    * @param {string} until - End date (ISO 8601 format)

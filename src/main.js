@@ -307,29 +307,12 @@ async function runTeamMetrics(
 
     const githubClient = new GitHubClient(githubToken, owner, repo)
 
-    // Collect DORA metrics (deploy frequency and cycle time)
-    const metricsCollector = new MetricsCollector(githubClient, {
-      includeMergeCommits: false,
-      maxReleases: 100,
-      maxTags: 100,
-      enabledMetrics: {
-        deploymentFrequency: true,
-        leadTime: true
-      }
-    })
-    const doraMetrics = await metricsCollector.collectMetrics()
-
     const teamMetricsCollector = new TeamMetricsCollector(githubClient, {
       timePeriod
     })
 
-    // Collect team metrics
+    // Collect team metrics (includes DORA metrics for the period)
     const metricsData = await teamMetricsCollector.collectMetrics()
-
-    // Add DORA metrics to team metrics
-    if (doraMetrics && doraMetrics.metrics) {
-      metricsData.dora_metrics = doraMetrics.metrics
-    }
 
     // Generate markdown report
     const markdownReport =
