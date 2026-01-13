@@ -46,13 +46,15 @@ export class TeamMetricsCollector {
   }
 
   /**
-   * Calculate cycle time for releases in the time period
+   * Calculate cycle time for releases created in the time period
+   * For each release in the period, includes ALL commits in that release
+   * regardless of when they were created
    * @param {Object} dateRange - Date range object with start and end
    * @returns {Promise<Object>} Cycle time metrics
    */
   async calculateCycleTime(dateRange) {
     try {
-      // Get releases within the date range
+      // Get releases created within the date range
       const releases = await this.githubClient.getReleasesByDateRange(
         dateRange.start,
         dateRange.end
@@ -62,15 +64,22 @@ export class TeamMetricsCollector {
         return {
           cycle_time: {
             avg_hours: null,
-            commit_count: 0
+            commit_count: 0,
+            oldest_hours: null,
+            newest_hours: null
           }
         }
       }
 
       const allCycleTimes = []
       let totalCommitCount = 0
+      let oldestCycleTime = null
+      let newestCycleTime = null
 
-      // For each release, calculate cycle times for its commits
+      // Get all releases for comparison (to find previous release)
+      const allReleases = await this.githubClient.listReleases(100)
+
+      // For each release in the date range, calculate cycle times for ALL its commits
       for (const release of releases) {
         const releaseCreatedAt = new Date(release.created_at)
 
@@ -78,9 +87,7 @@ export class TeamMetricsCollector {
         const tagData = await this.githubClient.resolveTag(release.tag_name)
         if (!tagData?.sha) continue
 
-        // Get commits for this release
-        // We need to find the previous release/tag to compare
-        const allReleases = await this.githubClient.listReleases(100)
+        // Find the previous release to determine which commits belong to this release
         const releaseIndex = allReleases.findIndex(
           (r) => r.tag_name === release.tag_name
         )
@@ -95,35 +102,79 @@ export class TeamMetricsCollector {
             previousRelease.tag_name
           )
           if (prevTagData?.sha) {
+            core.info(
+              `Comparing commits between ${previousRelease.tag_name} and ${release.tag_name}`
+            )
             const comparison = await this.githubClient.compareCommits(
               prevTagData.sha,
               tagData.sha
             )
             commits = comparison.commits || []
+            core.info(
+              `Found ${commits.length} commits in release ${release.tag_name}`
+            )
+          } else {
+            core.warning(
+              `Failed to resolve previous release tag: ${previousRelease.tag_name}`
+            )
           }
         } else {
-          // First release - just get the single commit
-          const commit = await this.githubClient.getCommit(tagData.sha)
-          if (commit) commits = [commit]
+          // First release - get all commits up to this tag
+          core.info(
+            `First release detected: ${release.tag_name}, getting all commits`
+          )
+          // For the first release, we should get ALL commits in the repository up to this tag
+          // not just the tag commit itself
+          try {
+            // Get commits from the beginning of the repo to this tag
+            const commitsResponse = await this.githubClient.octokit.request(
+              'GET /repos/{owner}/{repo}/commits',
+              {
+                owner: this.githubClient.owner,
+                repo: this.githubClient.repo,
+                sha: tagData.sha,
+                per_page: 100
+              }
+            )
+            commits = commitsResponse.data || []
+            core.info(`Found ${commits.length} commits in first release`)
+          } catch (error) {
+            core.warning(
+              `Failed to get commits for first release: ${error.message}`
+            )
+            // Fallback to just the tag commit
+            const commit = await this.githubClient.getCommit(tagData.sha)
+            if (commit) commits = [commit]
+          }
         }
 
-        // Calculate cycle time for each commit
+        // Calculate cycle time for ALL commits in this release
+        // (not filtered by date - we want all commits that were released in this period)
         for (const commit of commits) {
           const commitDate =
             commit.commit?.committer?.date || commit.commit?.author?.date
           if (!commitDate) continue
 
           const commitTime = new Date(commitDate)
-          const ageHours = (releaseCreatedAt - commitTime) / (1000 * 60 * 60)
+          const cycleTimeHours =
+            (releaseCreatedAt - commitTime) / (1000 * 60 * 60)
 
-          if (ageHours >= 0) {
-            allCycleTimes.push(ageHours)
+          if (cycleTimeHours >= 0) {
+            allCycleTimes.push(cycleTimeHours)
             totalCommitCount++
+
+            // Track oldest and newest cycle times
+            if (oldestCycleTime === null || cycleTimeHours > oldestCycleTime) {
+              oldestCycleTime = cycleTimeHours
+            }
+            if (newestCycleTime === null || cycleTimeHours < newestCycleTime) {
+              newestCycleTime = cycleTimeHours
+            }
           }
         }
       }
 
-      // Calculate average
+      // Calculate average and round values
       const avgCycleTime =
         allCycleTimes.length > 0
           ? Math.round(
@@ -136,7 +187,15 @@ export class TeamMetricsCollector {
       return {
         cycle_time: {
           avg_hours: avgCycleTime,
-          commit_count: totalCommitCount
+          commit_count: totalCommitCount,
+          oldest_hours:
+            oldestCycleTime !== null
+              ? Math.round(oldestCycleTime * 100) / 100
+              : null,
+          newest_hours:
+            newestCycleTime !== null
+              ? Math.round(newestCycleTime * 100) / 100
+              : null
         }
       }
     } catch (error) {
@@ -144,7 +203,9 @@ export class TeamMetricsCollector {
       return {
         cycle_time: {
           avg_hours: null,
-          commit_count: 0
+          commit_count: 0,
+          oldest_hours: null,
+          newest_hours: null
         }
       }
     }
@@ -244,7 +305,7 @@ export class TeamMetricsCollector {
         unique_authors: this.countUniqueAuthors(prs),
         metrics: stats,
         dora_metrics: {
-          ...cycleTimeMetrics.cycle_time,
+          cycle_time: cycleTimeMetrics.cycle_time,
           ...deployFreqMetrics
         },
         timestamp: new Date().toISOString()
@@ -758,7 +819,23 @@ export class TeamMetricsCollector {
             doraMetrics.cycle_time.avg_hours
           )
           const cycleTimeEmoji = this.getRatingEmoji(cycleTimeRating)
-          report += `### ${cycleTimeEmoji} Cycle Time — **${doraMetrics.cycle_time.avg_hours}h** (*${cycleTimeRating}*)\n**Definition:** Time from code commit to release<br>\n**Sample size:** ${doraMetrics.cycle_time.commit_count || 0} commits\n\n`
+          const oldestHours = doraMetrics.cycle_time.oldest_hours
+          const newestHours = doraMetrics.cycle_time.newest_hours
+
+          report += `### ${cycleTimeEmoji} Cycle Time — **${doraMetrics.cycle_time.avg_hours}h** (*${cycleTimeRating}*)\n`
+          report += `**Definition:** Time from code commit to release<br>\n`
+          report += `**Sample size:** ${doraMetrics.cycle_time.commit_count || 0} commits\n`
+
+          // Add oldest and newest commit details if available
+          if (oldestHours !== null && newestHours !== null) {
+            const oldestDays = Math.floor(oldestHours / 24)
+            const newestDays = Math.floor(newestHours / 24)
+            report += `<br>\n`
+            report += `📅 **Oldest commit:** ${oldestHours}h (${oldestDays} days)<br>\n`
+            report += `📅 **Newest commit:** ${newestHours}h (${newestDays} days)\n`
+          }
+
+          report += `\n`
         }
 
         if (hasDeployFreq) {
@@ -766,7 +843,7 @@ export class TeamMetricsCollector {
             doraMetrics.deploy_frequency_days
           )
           const deployFreqEmoji = this.getRatingEmoji(deployFreqRating)
-          report += `### ${deployFreqEmoji} Deploy Frequency — **${doraMetrics.deploy_frequency_days}** (*${deployFreqRating}*)\n**Definition:** Number of releases in the period (normalized to per week)<br>\n**Sample size:** ${doraMetrics.deploy_count || 0} deployments\n\n`
+          report += `### ${deployFreqEmoji} Deploy Frequency — **${doraMetrics.deploy_frequency_days}** (*${deployFreqRating}*)\n**Definition:** Number of releases in the period (normalized to per week)<br>\n**Sample size:** ${doraMetrics.deploy_count || 0} releases\n\n`
         }
 
         report += `---\n\n`
