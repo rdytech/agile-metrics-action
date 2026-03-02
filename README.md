@@ -87,7 +87,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Collect Deploy Frequency
-        uses: xavius-rb/agile-metrics-action@v3
+        uses: rdytech/agile-metrics-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           deployment-frequency: 'true'
@@ -110,7 +110,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Collect Cycle Time
-        uses: xavius-rb/agile-metrics-action@v3
+        uses: rdytech/agile-metrics-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           lead-time: 'true'
@@ -132,7 +132,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Analyze PR Size
-        uses: xavius-rb/agile-metrics-action@v3
+        uses: rdytech/agile-metrics-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           pr-size: 'true'
@@ -156,7 +156,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Analyze PR Maturity
-        uses: xavius-rb/agile-metrics-action@v3
+        uses: rdytech/agile-metrics-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           pr-maturity: 'true'
@@ -181,7 +181,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Collect Team Metrics
-        uses: xavius-rb/agile-metrics-action@v3
+        uses: rdytech/agile-metrics-action@v2
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           team-metrics: 'true'
@@ -459,7 +459,7 @@ for details.
 ### v2.x Configuration
 
 ```yaml
-- uses: xavius-rb/agile-metrics-action@v2
+- uses: rdytech/agile-metrics-action@v2
   with:
     deployment-frequency: 'true'
     lead-time: 'true'
@@ -467,12 +467,12 @@ for details.
     pr-maturity: 'true'
 ```
 
-### v3.x Configuration
+### v2.x Configuration
 
 Added `team-metrics`, `time-period` and `team-metrics-output-path`.
 
 ```yaml
-- uses: xavius-rb/agile-metrics-action@v3
+- uses: rdytech/agile-metrics-action@v2
   with:
     team-metrics: 'true'
     time-period: ${{ inputs.time-period || 'monthly' }}

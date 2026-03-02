@@ -533,6 +533,27 @@ export class DevExMetricsCollector {
    */
   async addPRComment(prNumber, prSizeMetrics, prMaturityMetrics = null) {
     try {
+      // Skip comment if PR is in draft status
+      if (prSizeMetrics.category === 'draft') {
+        core.info(`PR #${prNumber} is a draft - skipping PR comment`)
+        return
+      }
+
+      // Delete any previous comments created by this action
+      const existingComments =
+        await this.githubClient.listIssueComments(prNumber)
+      const previousActionComments = existingComments.filter((c) =>
+        c.body?.includes(
+          '*This comment was generated automatically by the Agile Metrics Action.*'
+        )
+      )
+      for (const comment of previousActionComments) {
+        await this.githubClient.deleteIssueComment(comment.id)
+        core.info(
+          `Deleted previous action comment ${comment.id} on PR #${prNumber}`
+        )
+      }
+
       const { size, details } = prSizeMetrics
       const sizeEmoji = this.getSizeEmoji(size)
       const sizeRating = this.getSizeRating(size)

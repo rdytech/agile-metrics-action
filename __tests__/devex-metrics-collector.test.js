@@ -15,6 +15,8 @@ const mockCore = {
 const mockGitHubClient = {
   getPullRequest: jest.fn(),
   getPullRequestFiles: jest.fn(),
+  listIssueComments: jest.fn(),
+  deleteIssueComment: jest.fn(),
   createPRComment: jest.fn(),
   addPRLabel: jest.fn(),
   getPullRequestCommits: jest.fn(),
@@ -609,6 +611,232 @@ describe('DevExMetricsCollector', () => {
 
         expect(result.maturity_ratio).toBe(0.85)
         expect(result.maturity_percentage).toBe(85)
+      })
+    })
+
+    describe('addPRComment with draft PR', () => {
+      it('should skip PR comment when PR is in draft status', async () => {
+        const mockCollector = {
+          githubClient: {
+            createPRComment: jest.fn()
+          },
+          getSizeEmoji: jest.fn().mockReturnValue('📏'),
+          getSizeRating: jest.fn().mockReturnValue('Good'),
+          getRatingEmoji: jest.fn().mockReturnValue('✅'),
+          getMaturityEmoji: jest.fn(),
+          getMaturityLevel: jest.fn()
+        }
+
+        const addPRComment = async function (
+          prNumber,
+          prSizeMetrics,
+          prMaturityMetrics = null
+        ) {
+          if (prSizeMetrics.category === 'draft') {
+            mockCore.info(`PR #${prNumber} is a draft - skipping PR comment`)
+            return
+          }
+          await this.githubClient.createPRComment(prNumber, 'comment body')
+        }
+
+        const draftSizeMetrics = {
+          size: 'draft',
+          category: 'draft',
+          details: { reason: 'PR is in draft status' }
+        }
+
+        await addPRComment.call(mockCollector, 123, draftSizeMetrics)
+
+        expect(
+          mockCollector.githubClient.createPRComment
+        ).not.toHaveBeenCalled()
+        expect(mockCore.info).toHaveBeenCalledWith(
+          'PR #123 is a draft - skipping PR comment'
+        )
+      })
+
+      it('should create PR comment for non-draft PR', async () => {
+        const mockCollector = {
+          githubClient: {
+            createPRComment: jest.fn().mockResolvedValue({})
+          },
+          getSizeEmoji: jest.fn().mockReturnValue('📏'),
+          getSizeRating: jest.fn().mockReturnValue('Good'),
+          getRatingEmoji: jest.fn().mockReturnValue('✅'),
+          getMaturityEmoji: jest.fn(),
+          getMaturityLevel: jest.fn()
+        }
+
+        const addPRComment = async function (
+          prNumber,
+          prSizeMetrics,
+          prMaturityMetrics = null
+        ) {
+          if (prSizeMetrics.category === 'draft') {
+            mockCore.info(`PR #${prNumber} is a draft - skipping PR comment`)
+            return
+          }
+          await this.githubClient.createPRComment(prNumber, 'comment body')
+          mockCore.info(`Added DevEx comment to PR #${prNumber}`)
+        }
+
+        const nonDraftSizeMetrics = {
+          size: 'medium',
+          category: 'size/m',
+          details: {
+            total_additions: 50,
+            total_deletions: 10,
+            total_changes: 60,
+            files_changed: 3
+          }
+        }
+
+        await addPRComment.call(mockCollector, 456, nonDraftSizeMetrics)
+
+        expect(mockCollector.githubClient.createPRComment).toHaveBeenCalledWith(
+          456,
+          'comment body'
+        )
+        expect(mockCore.info).toHaveBeenCalledWith(
+          'Added DevEx comment to PR #456'
+        )
+      })
+    })
+
+    describe('addPRComment previous comment cleanup', () => {
+      const ACTION_MARKER =
+        '*This comment was generated automatically by the Agile Metrics Action.*'
+
+      it('should delete previous action comments before creating a new one', async () => {
+        const mockCollector = {
+          githubClient: {
+            listIssueComments: jest.fn().mockResolvedValue([
+              { id: 10, body: `Old size comment\n\n${ACTION_MARKER}` },
+              { id: 11, body: 'Unrelated comment by a human' }
+            ]),
+            deleteIssueComment: jest.fn().mockResolvedValue(true),
+            createPRComment: jest.fn().mockResolvedValue({ id: 99 })
+          }
+        }
+
+        const addPRComment = async function (prNumber, prSizeMetrics) {
+          if (prSizeMetrics.category === 'draft') return
+
+          const existingComments =
+            await this.githubClient.listIssueComments(prNumber)
+          const previousActionComments = existingComments.filter((c) =>
+            c.body?.includes(ACTION_MARKER)
+          )
+          for (const comment of previousActionComments) {
+            await this.githubClient.deleteIssueComment(comment.id)
+            mockCore.info(
+              `Deleted previous action comment ${comment.id} on PR #${prNumber}`
+            )
+          }
+
+          await this.githubClient.createPRComment(prNumber, 'new comment')
+          mockCore.info(`Added DevEx comment to PR #${prNumber}`)
+        }
+
+        const sizeMetrics = { category: 'size/m', size: 'medium' }
+        await addPRComment.call(mockCollector, 7, sizeMetrics)
+
+        expect(
+          mockCollector.githubClient.listIssueComments
+        ).toHaveBeenCalledWith(7)
+        // Only the action comment (id 10) should be deleted
+        expect(
+          mockCollector.githubClient.deleteIssueComment
+        ).toHaveBeenCalledTimes(1)
+        expect(
+          mockCollector.githubClient.deleteIssueComment
+        ).toHaveBeenCalledWith(10)
+        expect(mockCollector.githubClient.createPRComment).toHaveBeenCalledWith(
+          7,
+          'new comment'
+        )
+      })
+
+      it('should not call deleteIssueComment when there are no previous action comments', async () => {
+        const mockCollector = {
+          githubClient: {
+            listIssueComments: jest
+              .fn()
+              .mockResolvedValue([{ id: 20, body: 'Just a regular comment' }]),
+            deleteIssueComment: jest.fn(),
+            createPRComment: jest.fn().mockResolvedValue({ id: 21 })
+          }
+        }
+
+        const addPRComment = async function (prNumber, prSizeMetrics) {
+          if (prSizeMetrics.category === 'draft') return
+
+          const existingComments =
+            await this.githubClient.listIssueComments(prNumber)
+          const previousActionComments = existingComments.filter((c) =>
+            c.body?.includes(ACTION_MARKER)
+          )
+          for (const comment of previousActionComments) {
+            await this.githubClient.deleteIssueComment(comment.id)
+          }
+
+          await this.githubClient.createPRComment(prNumber, 'new comment')
+        }
+
+        const sizeMetrics = { category: 'size/s', size: 'small' }
+        await addPRComment.call(mockCollector, 8, sizeMetrics)
+
+        expect(
+          mockCollector.githubClient.deleteIssueComment
+        ).not.toHaveBeenCalled()
+        expect(mockCollector.githubClient.createPRComment).toHaveBeenCalledWith(
+          8,
+          'new comment'
+        )
+      })
+
+      it('should delete multiple previous action comments', async () => {
+        const mockCollector = {
+          githubClient: {
+            listIssueComments: jest.fn().mockResolvedValue([
+              { id: 30, body: `First action comment\n\n${ACTION_MARKER}` },
+              { id: 31, body: `Second action comment\n\n${ACTION_MARKER}` }
+            ]),
+            deleteIssueComment: jest.fn().mockResolvedValue(true),
+            createPRComment: jest.fn().mockResolvedValue({ id: 32 })
+          }
+        }
+
+        const addPRComment = async function (prNumber, prSizeMetrics) {
+          if (prSizeMetrics.category === 'draft') return
+
+          const existingComments =
+            await this.githubClient.listIssueComments(prNumber)
+          const previousActionComments = existingComments.filter((c) =>
+            c.body?.includes(ACTION_MARKER)
+          )
+          for (const comment of previousActionComments) {
+            await this.githubClient.deleteIssueComment(comment.id)
+          }
+
+          await this.githubClient.createPRComment(prNumber, 'new comment')
+        }
+
+        const sizeMetrics = { category: 'size/l', size: 'large' }
+        await addPRComment.call(mockCollector, 9, sizeMetrics)
+
+        expect(
+          mockCollector.githubClient.deleteIssueComment
+        ).toHaveBeenCalledTimes(2)
+        expect(
+          mockCollector.githubClient.deleteIssueComment
+        ).toHaveBeenCalledWith(30)
+        expect(
+          mockCollector.githubClient.deleteIssueComment
+        ).toHaveBeenCalledWith(31)
+        expect(
+          mockCollector.githubClient.createPRComment
+        ).toHaveBeenCalledTimes(1)
       })
     })
   })
