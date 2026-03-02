@@ -508,4 +508,68 @@ describe('GitHubClient', () => {
       )
     })
   })
+
+  describe('listIssueComments', () => {
+    it('should return comments for an issue', async () => {
+      const mockComments = [
+        { id: 1, body: 'First comment' },
+        { id: 2, body: 'Second comment' }
+      ]
+
+      mockOctokit.request.mockResolvedValueOnce({ data: mockComments })
+
+      const result = await client.listIssueComments(42)
+
+      expect(mockOctokit.request).toHaveBeenCalledWith(
+        'GET /repos/{owner}/{repo}/issues/{issue_number}/comments',
+        {
+          owner: 'test-owner',
+          repo: 'test-repo',
+          issue_number: 42,
+          per_page: 100
+        }
+      )
+      expect(result).toEqual(mockComments)
+    })
+
+    it('should return empty array on error', async () => {
+      mockOctokit.request.mockRejectedValueOnce(new Error('Comments failed'))
+
+      const result = await client.listIssueComments(42)
+
+      expect(result).toEqual([])
+      expect(mockCore.warning).toHaveBeenCalledWith(
+        'Failed to list comments for issue 42: Comments failed'
+      )
+    })
+  })
+
+  describe('deleteIssueComment', () => {
+    it('should delete a comment and return true', async () => {
+      mockOctokit.request.mockResolvedValueOnce({})
+
+      const result = await client.deleteIssueComment(99)
+
+      expect(mockOctokit.request).toHaveBeenCalledWith(
+        'DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}',
+        {
+          owner: 'test-owner',
+          repo: 'test-repo',
+          comment_id: 99
+        }
+      )
+      expect(result).toBe(true)
+    })
+
+    it('should return false on error', async () => {
+      mockOctokit.request.mockRejectedValueOnce(new Error('Delete failed'))
+
+      const result = await client.deleteIssueComment(99)
+
+      expect(result).toBe(false)
+      expect(mockCore.warning).toHaveBeenCalledWith(
+        'Failed to delete comment 99: Delete failed'
+      )
+    })
+  })
 })

@@ -237,6 +237,55 @@ export class GitHubClient {
   }
 
   /**
+   * List all comments on an issue or pull request
+   * @param {number} issueNumber - Issue or pull request number
+   * @returns {Promise<Array>} Array of comment objects or empty array if failed
+   */
+  async listIssueComments(issueNumber) {
+    try {
+      const response = await this.octokit.request(
+        'GET /repos/{owner}/{repo}/issues/{issue_number}/comments',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          issue_number: issueNumber,
+          per_page: 100
+        }
+      )
+
+      return response.data
+    } catch (error) {
+      core.warning(
+        `Failed to list comments for issue ${issueNumber}: ${error.message}`
+      )
+      return []
+    }
+  }
+
+  /**
+   * Delete a comment on an issue or pull request
+   * @param {number} commentId - Comment ID to delete
+   * @returns {Promise<boolean>} True if successful, false otherwise
+   */
+  async deleteIssueComment(commentId) {
+    try {
+      await this.octokit.request(
+        'DELETE /repos/{owner}/{repo}/issues/comments/{comment_id}',
+        {
+          owner: this.owner,
+          repo: this.repo,
+          comment_id: commentId
+        }
+      )
+
+      return true
+    } catch (error) {
+      core.warning(`Failed to delete comment ${commentId}: ${error.message}`)
+      return false
+    }
+  }
+
+  /**
    * Create a comment on a pull request
    * @param {number} prNumber - Pull request number
    * @param {string} body - Comment body
