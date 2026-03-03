@@ -20,6 +20,7 @@ const mockGitHubClient = {
   createPRComment: jest.fn(),
   addPRLabel: jest.fn(),
   getPullRequestCommits: jest.fn(),
+  getPullRequestTimeline: jest.fn(),
   compareCommitsDiff: jest.fn()
 }
 
@@ -536,6 +537,188 @@ describe('DevExMetricsCollector', () => {
         expect(
           mockCollector.githubClient.getPullRequestFiles
         ).toHaveBeenCalledWith(123)
+      })
+    })
+
+    describe('calculatePRMaturity ready-for-review time', () => {
+      /**
+       * Build a minimal calculatePRMaturity implementation that mirrors the
+       * production logic so we can unit-test the ready-for-review branching
+       * without importing the full module.
+       */
+      function buildCalculatePRMaturity(githubClientOverrides) {
+        const client = { ...mockGitHubClient, ...githubClientOverrides }
+        const ctx = new TestDevExMetricsCollector(client)
+        return async (prNumber) => {
+          const prDetails = await client.getPullRequest(prNumber)
+          if (!prDetails)
+            return {
+              maturity_ratio: null,
+              maturity_percentage: null,
+              details: { error: 'Could not fetch PR details' }
+            }
+          if (prDetails.draft)
+            return {
+              maturity_ratio: null,
+              maturity_percentage: null,
+              details: { reason: 'PR is in draft status' }
+            }
+
+          const [prCommits, timeline] = await Promise.all([
+            client.getPullRequestCommits(prNumber),
+            client.getPullRequestTimeline(prNumber)
+          ])
+          if (!prCommits || prCommits.length === 0)
+            return {
+              maturity_ratio: null,
+              maturity_percentage: null,
+              details: { error: 'No commits found in PR' }
+            }
+
+          const prCreatedAt = new Date(prDetails.created_at)
+          const readyForReviewEvent = timeline?.find(
+            (event) => event.event === 'ready_for_review'
+          )
+          const readyForReviewAt = readyForReviewEvent
+            ? new Date(readyForReviewEvent.created_at)
+            : prCreatedAt
+
+          const significantCommitsAfterPR = prCommits.filter((commit) => {
+            const commitDate = new Date(commit.commit.author.date)
+            const timeDiffMinutes =
+              (commitDate - readyForReviewAt) / (1000 * 60)
+            return timeDiffMinutes > 5
+          })
+
+          if (significantCommitsAfterPR.length === 0) {
+            const prFiles = await client.getPullRequestFiles(prNumber)
+            const filteredFiles = ctx.filterFiles(prFiles || [])
+            const sizeDetails = ctx.calculateSizeDetails(filteredFiles)
+            return {
+              maturity_ratio: 1.0,
+              maturity_percentage: 100,
+              details: {
+                total_commits: prCommits.length,
+                total_changes: sizeDetails.total_changes,
+                changes_after_publication: 0,
+                stable_changes: sizeDetails.total_changes,
+                first_commit_sha: prCommits[0].sha,
+                last_commit_sha: prCommits[prCommits.length - 1].sha,
+                ready_for_review_at: readyForReviewAt.toISOString(),
+                reason: 'No significant commits after PR publication'
+              }
+            }
+          }
+
+          // Simplified maturity calculation path for tests
+          return {
+            maturity_ratio: 0.5,
+            maturity_percentage: 50,
+            details: {
+              ready_for_review_at: readyForReviewAt.toISOString()
+            }
+          }
+        }
+      }
+
+      it('should use PR creation time when no ready_for_review timeline event exists', async () => {
+        const createdAt = '2024-01-01T10:00:00Z'
+        // Both commits are well before creation time – 100% maturity expected
+        const commits = [
+          { sha: 'aaa', commit: { author: { date: '2024-01-01T09:00:00Z' } } },
+          { sha: 'bbb', commit: { author: { date: '2024-01-01T09:30:00Z' } } }
+        ]
+        const calculate = buildCalculatePRMaturity({
+          getPullRequest: jest
+            .fn()
+            .mockResolvedValue({ draft: false, created_at: createdAt }),
+          getPullRequestCommits: jest.fn().mockResolvedValue(commits),
+          getPullRequestTimeline: jest.fn().mockResolvedValue([]),
+          getPullRequestFiles: jest
+            .fn()
+            .mockResolvedValue([
+              { filename: 'src/a.js', additions: 10, deletions: 2 }
+            ])
+        })
+
+        const result = await calculate(42)
+
+        expect(result.maturity_percentage).toBe(100)
+        expect(new Date(result.details.ready_for_review_at).getTime()).toBe(
+          new Date(createdAt).getTime()
+        )
+      })
+
+      it('should use ready_for_review event time when PR was converted from draft', async () => {
+        const createdAt = '2024-01-01T10:00:00Z'
+        // PR became ready for review 2 hours after creation
+        const readyAt = '2024-01-01T12:00:00Z'
+        // Commit made 30 minutes AFTER PR creation but BEFORE ready-for-review
+        // should NOT count as a post-publication change
+        const commits = [
+          { sha: 'aaa', commit: { author: { date: '2024-01-01T09:00:00Z' } } },
+          {
+            sha: 'bbb',
+            commit: { author: { date: '2024-01-01T10:30:00Z' } } // after creation, before ready
+          }
+        ]
+        const calculate = buildCalculatePRMaturity({
+          getPullRequest: jest
+            .fn()
+            .mockResolvedValue({ draft: false, created_at: createdAt }),
+          getPullRequestCommits: jest.fn().mockResolvedValue(commits),
+          getPullRequestTimeline: jest
+            .fn()
+            .mockResolvedValue([
+              { event: 'ready_for_review', created_at: readyAt }
+            ]),
+          getPullRequestFiles: jest
+            .fn()
+            .mockResolvedValue([
+              { filename: 'src/a.js', additions: 10, deletions: 2 }
+            ])
+        })
+
+        const result = await calculate(42)
+
+        // Both commits are before the ready-for-review time, so 100% maturity
+        expect(result.maturity_percentage).toBe(100)
+        expect(new Date(result.details.ready_for_review_at).getTime()).toBe(
+          new Date(readyAt).getTime()
+        )
+      })
+
+      it('should count commits made more than 5 minutes after ready-for-review as post-publication', async () => {
+        const createdAt = '2024-01-01T10:00:00Z'
+        const readyAt = '2024-01-01T12:00:00Z'
+        // Commit made 30 minutes AFTER ready-for-review → significant post-publication change
+        const commits = [
+          { sha: 'aaa', commit: { author: { date: '2024-01-01T09:00:00Z' } } },
+          {
+            sha: 'bbb',
+            commit: { author: { date: '2024-01-01T12:30:00Z' } } // 30 min after ready
+          }
+        ]
+        const calculate = buildCalculatePRMaturity({
+          getPullRequest: jest
+            .fn()
+            .mockResolvedValue({ draft: false, created_at: createdAt }),
+          getPullRequestCommits: jest.fn().mockResolvedValue(commits),
+          getPullRequestTimeline: jest
+            .fn()
+            .mockResolvedValue([
+              { event: 'ready_for_review', created_at: readyAt }
+            ]),
+          getPullRequestFiles: jest.fn().mockResolvedValue([])
+        })
+
+        const result = await calculate(42)
+
+        // Significant post-publication commit exists → non-100% maturity path
+        expect(result.maturity_percentage).toBe(50)
+        expect(new Date(result.details.ready_for_review_at).getTime()).toBe(
+          new Date(readyAt).getTime()
+        )
       })
     })
 

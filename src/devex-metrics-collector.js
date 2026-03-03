@@ -265,7 +265,10 @@ export class DevExMetricsCollector {
         }
       }
 
-      const prCommits = await this.githubClient.getPullRequestCommits(prNumber)
+      const [prCommits, timeline] = await Promise.all([
+        this.githubClient.getPullRequestCommits(prNumber),
+        this.githubClient.getPullRequestTimeline(prNumber)
+      ])
       core.debug(`Found ${prCommits?.length || 0} commits in PR #${prNumber}`)
 
       if (!prCommits || prCommits.length === 0) {
@@ -279,27 +282,28 @@ export class DevExMetricsCollector {
         }
       }
 
-      // Get PR creation time
+      // Determine the reference time: when the PR became ready for review.
+      // For PRs that started as drafts this is the `ready_for_review` timeline
+      // event; for all other PRs it is the PR creation time.
       const prCreatedAt = new Date(prDetails.created_at)
-      core.debug(`PR created at: ${prCreatedAt.toISOString()}`)
-
-      // Filter commits that are after PR creation time
-      const commitsAfterPR = prCommits.filter((commit) => {
-        const commitDate = new Date(commit.commit.author.date)
-        return commitDate > prCreatedAt
-      })
-
-      core.debug(
-        `Found ${commitsAfterPR.length} commits after PR creation time`
+      const readyForReviewEvent = timeline?.find(
+        (event) => event.event === 'ready_for_review'
       )
+      const readyForReviewAt = readyForReviewEvent
+        ? new Date(readyForReviewEvent.created_at)
+        : prCreatedAt
 
-      // If there's only one commit, check if it was pushed within 5 minutes of PR creation
+      core.debug(`PR created at: ${prCreatedAt.toISOString()}`)
+      core.debug(`PR ready for review at: ${readyForReviewAt.toISOString()}`)
+
+      // If there's only one commit return 100% maturity unconditionally – there
+      // can be no post-publication churn in a single-commit PR.
       if (prCommits.length === 1) {
         const commitDate = new Date(prCommits[0].commit.author.date)
-        const timeDiffMinutes = (commitDate - prCreatedAt) / (1000 * 60)
+        const timeDiffMinutes = (commitDate - readyForReviewAt) / (1000 * 60)
 
         core.debug(
-          `Single commit time difference: ${timeDiffMinutes.toFixed(2)} minutes from PR creation`
+          `Single commit time difference: ${timeDiffMinutes.toFixed(2)} minutes from ready-for-review`
         )
 
         const prFiles = await this.githubClient.getPullRequestFiles(prNumber)
@@ -320,22 +324,23 @@ export class DevExMetricsCollector {
             stable_changes: sizeDetails.total_changes,
             first_commit_sha: prCommits[0].sha,
             last_commit_sha: prCommits[0].sha,
-            pr_created_at: prCreatedAt.toISOString(),
+            ready_for_review_at: readyForReviewAt.toISOString(),
             reason: 'Single commit PR'
           }
         }
       }
 
-      // Check if all commits are older than PR creation (or within 5 minutes)
+      // Check if all commits are older than ready-for-review time (or within 5 minutes)
       const commitsWithinGracePeriod = prCommits.filter((commit) => {
         const commitDate = new Date(commit.commit.author.date)
-        const timeDiffMinutes = Math.abs(commitDate - prCreatedAt) / (1000 * 60)
-        return timeDiffMinutes <= 5 || commitDate <= prCreatedAt
+        const timeDiffMinutes =
+          Math.abs(commitDate - readyForReviewAt) / (1000 * 60)
+        return timeDiffMinutes <= 5 || commitDate <= readyForReviewAt
       })
 
       if (commitsWithinGracePeriod.length === prCommits.length) {
         core.debug(
-          'All commits are within 5 minutes of PR creation or older - 100% maturity'
+          'All commits are within 5 minutes of ready-for-review time or older - 100% maturity'
         )
 
         const prFiles = await this.githubClient.getPullRequestFiles(prNumber)
@@ -352,21 +357,23 @@ export class DevExMetricsCollector {
             stable_changes: sizeDetails.total_changes,
             first_commit_sha: prCommits[0].sha,
             last_commit_sha: prCommits[prCommits.length - 1].sha,
-            pr_created_at: prCreatedAt.toISOString(),
+            ready_for_review_at: readyForReviewAt.toISOString(),
             reason: 'All commits within grace period or pre-existing'
           }
         }
       }
 
-      // Find commits that are meaningfully after PR creation (>5 minutes)
+      // Find commits that are meaningfully after ready-for-review time (>5 minutes)
       const significantCommitsAfterPR = prCommits.filter((commit) => {
         const commitDate = new Date(commit.commit.author.date)
-        const timeDiffMinutes = (commitDate - prCreatedAt) / (1000 * 60)
+        const timeDiffMinutes = (commitDate - readyForReviewAt) / (1000 * 60)
         return timeDiffMinutes > 5
       })
 
       if (significantCommitsAfterPR.length === 0) {
-        core.debug('No significant commits after PR creation - 100% maturity')
+        core.debug(
+          'No significant commits after ready-for-review time - 100% maturity'
+        )
 
         const prFiles = await this.githubClient.getPullRequestFiles(prNumber)
         const filteredFiles = this.filterFiles(prFiles || [])
@@ -382,7 +389,7 @@ export class DevExMetricsCollector {
             stable_changes: sizeDetails.total_changes,
             first_commit_sha: prCommits[0].sha,
             last_commit_sha: prCommits[prCommits.length - 1].sha,
-            pr_created_at: prCreatedAt.toISOString(),
+            ready_for_review_at: readyForReviewAt.toISOString(),
             reason: 'No significant commits after PR publication'
           }
         }
@@ -472,7 +479,7 @@ export class DevExMetricsCollector {
           last_commit_sha: lastCommit.sha,
           baseline_commit_sha: baselineCommit.sha,
           first_significant_commit_sha: firstSignificantCommit.sha,
-          pr_created_at: prCreatedAt.toISOString(),
+          ready_for_review_at: readyForReviewAt.toISOString(),
           reason: 'Calculated based on meaningful commits after publication'
         }
       }
